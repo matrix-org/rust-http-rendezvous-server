@@ -1,0 +1,26 @@
+[build-system]
+requires = ["maturin>=0.13,<0.14"]
+build-backend = "maturin"
+
+[project]
+name = "synapse_rendezvous"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+
+
+[tool.poetry]
+name = "synapse_rendezvous"
+version = "0.0.1"
+description = "A Rendez-Vous server module for Synapse"
+authors = ["Quentin Gliech <quenting@element.io>"]
+
+[tool.poetry.dependencies]
+python = "^3.7.1"
+
+[tool.poetry.dev-dependencies]
+matrix-synapse = "^1.66.0"
+maturin = "^0.13.2"
