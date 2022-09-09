@@ -335,6 +335,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_post_and_put_if_match() {
+        let app = router("/");
+
+        let body = r#"{"hello": "world"}"#.to_string();
+        let request = Request::post("/")
+            .header(CONTENT_TYPE, "application/json")
+            .header(CONTENT_LENGTH, body.len())
+            .body(body)
+            .unwrap();
+
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
+        let etag = response.headers().get(ETAG).unwrap().to_str().unwrap();
+        let url = format!("/{location}");
+
+        let request = Request::put(&url).header("if-match", etag).body(String::new()).unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        assert_ne!(response.headers().get(ETAG).unwrap(), etag);
+
+        let request = Request::put(&url).header("if-match", format!("{etag}+extra")).body(String::new()).unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::PRECONDITION_FAILED);
+        assert_eq!(response.headers().get(ETAG).unwrap(), etag);
+    }
+
+    #[tokio::test]
     async fn test_post_delete_and_get() {
         let app = router("/");
 
