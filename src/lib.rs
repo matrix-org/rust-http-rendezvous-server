@@ -37,7 +37,7 @@ use axum::{
 };
 use base64ct::Encoding;
 use bytes::Bytes;
-use headers::{ContentType, ETag, Expires, HeaderName, IfNoneMatch, LastModified};
+use headers::{ContentType, ETag, Expires, HeaderName, IfNoneMatch, IfMatch, LastModified};
 use mime::Mime;
 use sha2::Digest;
 use tokio::sync::RwLock;
@@ -187,14 +187,20 @@ async fn update_session(
     State(sessions): State<Sessions>,
     Path(id): Path<Uuid>,
     content_type: Option<TypedHeader<ContentType>>,
+    if_match: Option<TypedHeader<IfMatch>>,
     ContentLengthLimit(payload): ContentLengthLimit<Bytes, MAX_BYTES>,
 ) -> Response {
-    // TODO: check the if-match header
-    // TODO: probably missing some response headers
-
-    let content_type =
-        content_type.map_or(mime::APPLICATION_OCTET_STREAM, |TypedHeader(c)| c.into());
     if let Some(session) = sessions.write().await.get_mut(&id) {
+
+        if let Some(TypedHeader(if_match)) = if_match {
+            if !if_match.precondition_passes(&session.etag()) {
+                return (StatusCode::PRECONDITION_FAILED, session.typed_headers()).into_response();
+            }
+        }
+
+        let content_type =
+        content_type.map_or(mime::APPLICATION_OCTET_STREAM, |TypedHeader(c)| c.into());
+
         session.update(payload, content_type);
         (StatusCode::ACCEPTED, session.typed_headers()).into_response()
     } else {
