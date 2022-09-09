@@ -28,7 +28,7 @@ use axum::{
     body::HttpBody,
     extract::{ContentLengthLimit, FromRef, Path, State},
     http::{
-        header::{ETAG, LOCATION, CONTENT_TYPE, IF_MATCH, IF_NONE_MATCH},
+        header::{CONTENT_TYPE, ETAG, IF_MATCH, IF_NONE_MATCH, LOCATION},
         StatusCode,
     },
     response::{IntoResponse, Response},
@@ -37,7 +37,7 @@ use axum::{
 };
 use base64ct::Encoding;
 use bytes::Bytes;
-use headers::{ContentType, ETag, Expires, HeaderName, IfNoneMatch, IfMatch, LastModified};
+use headers::{ContentType, ETag, Expires, HeaderName, IfMatch, IfNoneMatch, LastModified};
 use mime::Mime;
 use sha2::Digest;
 use tokio::sync::RwLock;
@@ -191,7 +191,6 @@ async fn update_session(
     ContentLengthLimit(payload): ContentLengthLimit<Bytes, MAX_BYTES>,
 ) -> Response {
     if let Some(session) = sessions.write().await.get_mut(&id) {
-
         if let Some(TypedHeader(if_match)) = if_match {
             if !if_match.precondition_passes(&session.etag()) {
                 return (StatusCode::PRECONDITION_FAILED, session.typed_headers()).into_response();
@@ -199,7 +198,7 @@ async fn update_session(
         }
 
         let content_type =
-        content_type.map_or(mime::APPLICATION_OCTET_STREAM, |TypedHeader(c)| c.into());
+            content_type.map_or(mime::APPLICATION_OCTET_STREAM, |TypedHeader(c)| c.into());
 
         session.update(payload, content_type);
         (StatusCode::ACCEPTED, session.typed_headers()).into_response()
@@ -334,7 +333,10 @@ mod tests {
         let etag = response.headers().get(ETAG).unwrap();
         let url = format!("/{location}");
 
-        let request = Request::get(&url).header("if-none-match", etag).body(String::new()).unwrap();
+        let request = Request::get(&url)
+            .header("if-none-match", etag)
+            .body(String::new())
+            .unwrap();
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
         assert_eq!(response.headers().get(ETAG).unwrap(), etag);
@@ -380,12 +382,18 @@ mod tests {
         let etag = response.headers().get(ETAG).unwrap().to_str().unwrap();
         let url = format!("/{location}");
 
-        let request = Request::put(&url).header("if-match", etag).body(String::new()).unwrap();
+        let request = Request::put(&url)
+            .header("if-match", etag)
+            .body(String::new())
+            .unwrap();
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::ACCEPTED);
         assert_eq!(response.headers().get(ETAG).unwrap(), etag);
 
-        let request = Request::put(&url).header("if-match", etag).body(String::new()).unwrap();
+        let request = Request::put(&url)
+            .header("if-match", etag)
+            .body(String::new())
+            .unwrap();
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::PRECONDITION_FAILED);
         assert_ne!(response.headers().get(ETAG).unwrap(), etag);
