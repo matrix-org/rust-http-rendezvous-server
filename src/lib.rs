@@ -17,15 +17,15 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::trait_duplication_in_bounds)]
 
-use std::{collections::HashMap, sync::Arc, time::SystemTime};
+use std::{borrow::Cow, collections::HashMap, ops::Deref, sync::Arc, time::SystemTime};
 
 use axum::{
     body::HttpBody,
-    extract::{ContentLengthLimit, Path},
+    extract::{ContentLengthLimit, FromRef, Path, State},
     http::{header::LOCATION, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
-    Extension, Router, TypedHeader,
+    Router, TypedHeader,
 };
 use base64ct::Encoding;
 use bytes::Bytes;
@@ -72,23 +72,66 @@ impl Session {
     }
 }
 
-struct State {
+#[derive(Clone, Default)]
+struct Sessions {
     // TODO: is that global lock alright?
-    sessions: RwLock<HashMap<Uuid, Session>>,
-    prefix: String,
+    inner: Arc<RwLock<HashMap<Uuid, Session>>>,
 }
 
-impl State {
-    fn new(prefix: String) -> Self {
+impl Deref for Sessions {
+    type Target = RwLock<HashMap<Uuid, Session>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+#[derive(Clone)]
+struct Prefix {
+    inner: Cow<'static, str>,
+}
+
+impl Prefix {
+    fn new(prefix: impl Into<Cow<'static, str>>) -> Self {
         Self {
-            sessions: RwLock::default(),
-            prefix,
+            inner: prefix.into(),
+        }
+    }
+
+    fn location(&self, id: &Uuid) -> String {
+        format!("{}/{}", self.inner, id)
+    }
+}
+
+impl FromRef<AppState> for Sessions {
+    fn from_ref(input: &AppState) -> Self {
+        input.sessions.clone()
+    }
+}
+
+impl FromRef<AppState> for Prefix {
+    fn from_ref(input: &AppState) -> Self {
+        input.prefix.clone()
+    }
+}
+
+struct AppState {
+    sessions: Sessions,
+    prefix: Prefix,
+}
+
+impl AppState {
+    fn new(prefix: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            sessions: Sessions::default(),
+            prefix: Prefix::new(prefix),
         }
     }
 }
 
 async fn new_session(
-    Extension(state): Extension<Arc<State>>,
+    State(sessions): State<Sessions>,
+    State(prefix): State<Prefix>,
     content_type: Option<TypedHeader<ContentType>>,
     // TODO: this requires a Content-Length header, is that alright?
     ContentLengthLimit(payload): ContentLengthLimit<Bytes, MAX_BYTES>,
@@ -98,10 +141,10 @@ async fn new_session(
     let content_type =
         content_type.map_or(mime::APPLICATION_OCTET_STREAM, |TypedHeader(c)| c.into());
     let session = Session::new(payload, content_type);
-    state.sessions.write().await.insert(id, session);
+    sessions.write().await.insert(id, session);
 
     // TODO: actually join with the prefix, to prevent accidental double slashes
-    let location = format!("{}/{}", state.prefix, id);
+    let location = prefix.location(&id);
     let headers = [
         (LOCATION, location),
         (
@@ -112,12 +155,12 @@ async fn new_session(
     (StatusCode::NO_CONTENT, headers)
 }
 async fn update_session(
-    Extension(state): Extension<Arc<State>>,
+    State(sessions): State<Sessions>,
     Path(id): Path<Uuid>,
     content_type: Option<TypedHeader<ContentType>>,
     ContentLengthLimit(payload): ContentLengthLimit<Bytes, MAX_BYTES>,
 ) -> StatusCode {
-    if state.sessions.read().await.get(&id).is_none() {
+    if sessions.read().await.get(&id).is_none() {
         return StatusCode::NOT_FOUND;
     }
 
@@ -127,16 +170,16 @@ async fn update_session(
     let content_type =
         content_type.map_or(mime::APPLICATION_OCTET_STREAM, |TypedHeader(c)| c.into());
     let session = Session::new(payload, content_type);
-    state.sessions.write().await.insert(id, session);
+    sessions.write().await.insert(id, session);
     StatusCode::ACCEPTED
 }
 
 async fn get_session(
-    Extension(state): Extension<Arc<State>>,
+    State(sessions): State<Sessions>,
     Path(id): Path<Uuid>,
     if_none_match: Option<TypedHeader<IfNoneMatch>>,
 ) -> Response {
-    let sessions = state.sessions.read().await;
+    let sessions = sessions.read().await;
     let session = if let Some(session) = sessions.get(&id) {
         session
     } else {
@@ -161,18 +204,58 @@ async fn get_session(
 }
 
 #[must_use]
-pub fn router<B>(prefix: &str) -> Router<B>
+pub fn router<B>(prefix: impl Into<Cow<'static, str>>) -> Router<(), B>
 where
     B: HttpBody + Send + 'static,
     <B as HttpBody>::Data: Send,
     <B as HttpBody>::Error: std::error::Error + Send + Sync,
 {
-    // TODO: switch to axum 0.6 state
-    let state = Arc::new(State::new(prefix.to_owned()));
-    let router = Router::new()
+    let prefix = prefix.into();
+    let state = AppState::new(prefix.clone());
+    let router = Router::with_state(state)
         .route("/", post(new_session))
-        .route("/:id", get(get_session).put(update_session))
-        .layer(Extension(state));
+        .route("/:id", get(get_session).put(update_session));
 
-    Router::new().nest(prefix, router)
+    Router::new().nest(&prefix, router)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use axum::http::{
+        header::{CONTENT_LENGTH, CONTENT_TYPE},
+        Request,
+    };
+    use tower::util::ServiceExt;
+
+    #[tokio::test]
+    async fn test_post_and_get() {
+        let app = router("/");
+
+        let body = r#"{"hello": "world"}"#.to_string();
+        let request = Request::post("/")
+            .header(CONTENT_TYPE, "application/json")
+            .header(CONTENT_LENGTH, body.len())
+            .body(body)
+            .unwrap();
+
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        let location = response.headers().get(LOCATION).unwrap();
+
+        let request = Request::get(location.to_str().unwrap())
+            .body(String::new())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
+
+        let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
+        assert_eq!(&body[..], br#"{"hello": "world"}"#);
+    }
 }
