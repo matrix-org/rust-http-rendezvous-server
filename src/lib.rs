@@ -251,7 +251,7 @@ where
             .allow_origin(Any)
             .allow_methods(Any)
             .allow_headers([CONTENT_TYPE, IF_MATCH, IF_NONE_MATCH])
-            .expose_headers([ETAG, LOCATION]),
+            .expose_headers([ETAG, LOCATION, HeaderName::from_static("x-max-bytes")]),
     )
 }
 
