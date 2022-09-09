@@ -215,8 +215,8 @@ async fn get_session(
     };
 
     if let Some(TypedHeader(if_none_match)) = if_none_match {
-        if if_none_match.precondition_passes(&session.etag()) {
-            return StatusCode::NOT_MODIFIED.into_response();
+        if !if_none_match.precondition_passes(&session.etag()) {
+            return (StatusCode::NOT_MODIFIED, session.typed_headers()).into_response();
         }
     }
 
