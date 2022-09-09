@@ -287,6 +287,7 @@ mod tests {
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
         let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
+        let etag = response.headers().get(ETAG).unwrap();
         let url = format!("/{location}");
 
         let request = Request::get(&url).body(String::new()).unwrap();
@@ -297,6 +298,7 @@ mod tests {
             response.headers().get(CONTENT_TYPE).unwrap(),
             "application/json"
         );
+        assert_eq!(response.headers().get(ETAG).unwrap(), etag);
 
         // Let the entry expire
         advance_time(TTL + Duration::from_secs(1)).await;
