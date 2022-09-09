@@ -42,7 +42,7 @@ pub struct SynapseRendezvousModule;
 impl SynapseRendezvousModule {
     #[new]
     fn new(config: &Config, module_api: ModuleApi) -> PyResult<Self> {
-        let service = rendezvous::router(&config.prefix)
+        let service = rendezvous::router(config.prefix.clone())
             .map_response(|res| res.map(|b| b.map_err(|e| anyhow!(e))));
 
         module_api.register_web_service(&config.prefix, service)?;

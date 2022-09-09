@@ -39,6 +39,7 @@ use headers::{ContentType, ETag, Expires, HeaderName, IfNoneMatch, LastModified}
 use mime::Mime;
 use sha2::Digest;
 use tokio::sync::RwLock;
+use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
 // TODO: config?
@@ -271,7 +272,8 @@ where
         .route(
             "/:id",
             get(get_session).put(update_session).delete(delete_session),
-        );
+        )
+        .layer(CorsLayer::permissive());
 
     Router::new().nest(&prefix, router)
 }
