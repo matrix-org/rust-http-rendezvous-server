@@ -392,7 +392,8 @@ mod tests {
             .unwrap();
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::ACCEPTED);
-        assert_eq!(response.headers().get(ETAG).unwrap(), etag);
+        let etag2 = response.headers().get(ETAG).unwrap().to_str().unwrap();
+        assert_ne!(etag2, etag);
 
         let request = Request::put(&url)
             .header("if-match", etag)
@@ -401,7 +402,7 @@ mod tests {
             .unwrap();
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::PRECONDITION_FAILED);
-        assert_ne!(response.headers().get(ETAG).unwrap(), etag);
+        assert_eq!(response.headers().get(ETAG).unwrap(), etag2);
     }
 
     #[tokio::test]
