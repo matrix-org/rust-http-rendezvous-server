@@ -18,7 +18,6 @@
 #![allow(clippy::trait_duplication_in_bounds)]
 
 use std::{
-    borrow::Cow,
     collections::HashMap,
     ops::Deref,
     sync::Arc,
@@ -132,52 +131,24 @@ impl Deref for Sessions {
     }
 }
 
-#[derive(Clone)]
-struct Prefix {
-    inner: Cow<'static, str>,
-}
-
-impl Prefix {
-    fn new(prefix: impl Into<Cow<'static, str>>) -> Self {
-        Self {
-            inner: prefix.into(),
-        }
-    }
-
-    fn location(&self, id: &Uuid) -> String {
-        format!("{}/{}", self.inner, id)
-    }
-}
-
 impl FromRef<AppState> for Sessions {
     fn from_ref(input: &AppState) -> Self {
         input.sessions.clone()
     }
 }
 
-impl FromRef<AppState> for Prefix {
-    fn from_ref(input: &AppState) -> Self {
-        input.prefix.clone()
-    }
-}
-
 struct AppState {
     sessions: Sessions,
-    prefix: Prefix,
 }
 
 impl AppState {
-    fn new(prefix: impl Into<Cow<'static, str>>, sessions: Sessions) -> Self {
-        Self {
-            sessions,
-            prefix: Prefix::new(prefix),
-        }
+    fn new(sessions: Sessions) -> Self {
+        Self { sessions }
     }
 }
 
 async fn new_session(
     State(sessions): State<Sessions>,
-    State(prefix): State<Prefix>,
     content_type: Option<TypedHeader<ContentType>>,
     // TODO: this requires a Content-Length header, is that alright?
     ContentLengthLimit(payload): ContentLengthLimit<Bytes, MAX_BYTES>,
@@ -190,8 +161,7 @@ async fn new_session(
     let headers = session.typed_headers();
     sessions.insert(id, session, TTL).await;
 
-    // TODO: actually join with the prefix, to prevent accidental double slashes
-    let location = prefix.location(&id);
+    let location = id.to_string();
     let additional_headers = [
         (LOCATION, location),
         (
@@ -257,16 +227,15 @@ async fn get_session(
 }
 
 #[must_use]
-pub fn router<B>(prefix: impl Into<Cow<'static, str>>) -> Router<(), B>
+pub fn router<B>(prefix: &str) -> Router<(), B>
 where
     B: HttpBody + Send + 'static,
     <B as HttpBody>::Data: Send,
     <B as HttpBody>::Error: std::error::Error + Send + Sync,
 {
-    let prefix = prefix.into();
     let sessions = Sessions::default();
 
-    let state = AppState::new(prefix.clone(), sessions);
+    let state = AppState::new(sessions);
     let router = Router::with_state(state)
         .route("/", post(new_session))
         .route(
@@ -275,7 +244,7 @@ where
         )
         .layer(CorsLayer::permissive());
 
-    Router::new().nest(&prefix, router)
+    Router::new().nest(prefix, router)
 }
 
 #[cfg(test)]
@@ -310,8 +279,9 @@ mod tests {
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
         let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
+        let url = format!("/{location}");
 
-        let request = Request::get(location).body(String::new()).unwrap();
+        let request = Request::get(&url).body(String::new()).unwrap();
 
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -326,7 +296,7 @@ mod tests {
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(&body[..], br#"{"hello": "world"}"#);
 
-        let request = Request::get(location).body(String::new()).unwrap();
+        let request = Request::get(&url).body(String::new()).unwrap();
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
@@ -345,16 +315,17 @@ mod tests {
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
         let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
+        let url = format!("/{location}");
 
-        let request = Request::get(location).body(String::new()).unwrap();
+        let request = Request::get(&url).body(String::new()).unwrap();
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let request = Request::delete(location).body(String::new()).unwrap();
+        let request = Request::delete(&url).body(String::new()).unwrap();
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
 
-        let request = Request::get(location).body(String::new()).unwrap();
+        let request = Request::get(&url).body(String::new()).unwrap();
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
