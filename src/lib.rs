@@ -27,7 +27,10 @@ use std::{
 use axum::{
     body::HttpBody,
     extract::{ContentLengthLimit, FromRef, Path, State},
-    http::{header::LOCATION, StatusCode},
+    http::{
+        header::{ETAG, LOCATION},
+        StatusCode,
+    },
     response::{IntoResponse, Response},
     routing::{get, post},
     Router, TypedHeader,
@@ -38,7 +41,7 @@ use headers::{ContentType, ETag, Expires, HeaderName, IfNoneMatch, LastModified}
 use mime::Mime;
 use sha2::Digest;
 use tokio::sync::RwLock;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
 use uuid::Uuid;
 
 // TODO: config?
@@ -241,10 +244,14 @@ where
         .route(
             "/:id",
             get(get_session).put(update_session).delete(delete_session),
-        )
-        .layer(CorsLayer::permissive());
+        );
 
-    Router::new().nest(prefix, router)
+    Router::new().nest(prefix, router).layer(
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .expose_headers([ETAG, LOCATION]),
+    )
 }
 
 #[cfg(test)]
