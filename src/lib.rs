@@ -359,7 +359,10 @@ mod tests {
         let etag = response.headers().get(ETAG).unwrap().to_str().unwrap();
         let url = format!("/{location}");
 
-        let request = Request::put(&url).body(String::new()).unwrap();
+        let request = Request::put(&url)
+            .header(CONTENT_LENGTH, 0)
+            .body(String::new())
+            .unwrap();
         let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::ACCEPTED);
         assert_ne!(response.headers().get(ETAG).unwrap(), etag);
@@ -384,6 +387,7 @@ mod tests {
 
         let request = Request::put(&url)
             .header("if-match", etag)
+            .header(CONTENT_LENGTH, 0)
             .body(String::new())
             .unwrap();
         let response = app.clone().oneshot(request).await.unwrap();
@@ -392,6 +396,7 @@ mod tests {
 
         let request = Request::put(&url)
             .header("if-match", etag)
+            .header(CONTENT_LENGTH, 0)
             .body(String::new())
             .unwrap();
         let response = app.clone().oneshot(request).await.unwrap();
