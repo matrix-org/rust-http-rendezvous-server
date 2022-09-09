@@ -172,7 +172,7 @@ async fn new_session(
             MAX_BYTES.to_string(),
         ),
     ];
-    (StatusCode::NO_CONTENT, headers, additional_headers)
+    (StatusCode::CREATED, headers, additional_headers)
 }
 
 async fn delete_session(State(sessions): State<Sessions>, Path(id): Path<Uuid>) -> StatusCode {
@@ -285,7 +285,7 @@ mod tests {
             .unwrap();
 
         let response = app.clone().oneshot(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(response.status(), StatusCode::CREATED);
         let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
         let url = format!("/{location}");
 
@@ -321,7 +321,7 @@ mod tests {
             .unwrap();
 
         let response = app.clone().oneshot(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(response.status(), StatusCode::CREATED);
         let location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
         let url = format!("/{location}");
 
