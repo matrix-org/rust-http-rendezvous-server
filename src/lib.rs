@@ -28,7 +28,7 @@ use axum::{
     body::HttpBody,
     extract::{ContentLengthLimit, FromRef, Path, State},
     http::{
-        header::{ETAG, LOCATION},
+        header::{ETAG, LOCATION, CONTENT_TYPE, IF_MATCH, IF_NONE_MATCH},
         StatusCode,
     },
     response::{IntoResponse, Response},
@@ -250,6 +250,7 @@ where
         CorsLayer::new()
             .allow_origin(Any)
             .allow_methods(Any)
+            .allow_headers([CONTENT_TYPE, IF_MATCH, IF_NONE_MATCH])
             .expose_headers([ETAG, LOCATION]),
     )
 }
