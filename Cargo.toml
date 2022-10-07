@@ -4,22 +4,22 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = { version = "0.6.0-rc.1", features = ["headers"] }
+axum = { version = "0.6.0-rc.2", features = ["headers"] }
 base64ct = { version = "1.5.2", features = ["std"] }
 bytes = "1.2.1"
 headers = "0.3.8"
-mime = "0.3.14"
-sha2 = "0.10.5"
-time = "0.3.14"
-tokio = { version = "1.21.0", features = ["sync", "time"] }
+mime = "0.3.16"
+sha2 = "0.10.6"
+time = "0.3.15"
+tokio = { version = "1.21.2", features = ["sync", "time"] }
 tower = { version = "0.4.13", features = ["util"] }
 tower-http = { version = "0.3.4", features = ["cors"] }
-tracing = "0.1.36"
+tracing = "0.1.37"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng", "serde"] }
 
 [dev-dependencies]
 hyper = "0.14.20"
-tokio = { version = "1.21.0", features = ["macros", "rt", "test-util"] }
+tokio = { version = "1.21.2", features = ["macros", "rt", "test-util"] }
 
 [workspace]
 members = ["server", "synapse"]
