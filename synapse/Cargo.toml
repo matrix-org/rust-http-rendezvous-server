@@ -2,6 +2,7 @@
 name = "synapse_rendezvous"
 version = "0.1.0"
 edition = "2021"
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -13,7 +14,7 @@ anyhow = "1.0.65"
 http-body = "0.4.5"
 pyo3 = { version = "0.17.2", features = ["extension-module", "anyhow"] }
 pyo3-log = "0.7.0"
-pyo3-matrix-synapse-module = { git = "https://github.com/sandhose/pyo3-matrix-synapse-module.git" }
+pyo3-matrix-synapse-module = "0.1.0"
 serde = { version = "1.0.145", features = ["derive"] }
 tower = { version = "0.4.13", features = ["util"] }
 tracing = { version = "0.1.37", features = ["log", "log-always"] }
