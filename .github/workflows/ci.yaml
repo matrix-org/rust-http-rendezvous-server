@@ -167,7 +167,7 @@ jobs:
 
   publish:
     name: Publish on crates.io
-    needs: [rustfmt, clippy, minimal-versions, test, coverage]
+    needs: [rustfmt, clippy, test, coverage]
     runs-on: ubuntu-latest
 
     # Publish on tags
