@@ -1,5 +1,5 @@
 [package]
-name = "matrix-http-rendezvous-synapse"
+name = "matrix_http_rendezvous_synapse"
 version = "0.1.0"
 authors = ["Quentin Gliech <quenting@element.io>"]
 edition = "2021"
