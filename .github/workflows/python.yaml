@@ -142,11 +142,13 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: wheels
+          path: dist
 
       - name: Download sdist
         uses: actions/download-artifact@v3
         with:
           name: sdist
+          path: dist
 
       - run: find .
 
