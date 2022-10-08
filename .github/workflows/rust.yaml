@@ -192,7 +192,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: publish
-          args: -p matrix-http-rendezvous
+          args: --no-verify -p matrix-http-rendezvous
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
@@ -200,6 +200,6 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: publish
-          args: -p matrix-http-rendezvous-server
+          args: --no-verify -p matrix-http-rendezvous-server
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
