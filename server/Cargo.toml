@@ -1,13 +1,16 @@
 [package]
-name = "server"
+name = "matrix-http-rendezvous-server"
 version = "0.1.0"
+authors = ["Quentin Gliech <quenting@element.io>"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "Apache-2.0"
+description = "A standalone server which implements MSC3886"
+repository = "https://github.com/matrix-org/rust-http-rendezvous-server/"
+rust-version = "1.61"
 
 [dependencies]
 hyper = { version = "0.14.20", features = ["server"] }
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
 tracing-subscriber = "0.3.16"
 
-rendezvous = { path = "../" }
+matrix-http-rendezvous = { path = "../", version = "0.1.0" }

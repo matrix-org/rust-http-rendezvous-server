@@ -15,11 +15,7 @@
 #![forbid(unsafe_code)]
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
-#![allow(
-    clippy::borrow_deref_ref,
-    clippy::used_underscore_binding,
-    clippy::needless_pass_by_value
-)]
+#![allow(clippy::needless_pass_by_value)]
 
 use anyhow::anyhow;
 use http_body::Body;
@@ -42,7 +38,7 @@ pub struct SynapseRendezvousModule;
 impl SynapseRendezvousModule {
     #[new]
     fn new(config: &Config, module_api: ModuleApi) -> PyResult<Self> {
-        let service = rendezvous::router(&config.prefix)
+        let service = matrix_http_rendezvous::router(&config.prefix)
             .map_response(|res| res.map(|b| b.map_err(|e| anyhow!(e))));
 
         module_api.register_web_service(&config.prefix, service)?;
@@ -56,7 +52,7 @@ impl SynapseRendezvousModule {
 }
 
 #[pymodule]
-fn synapse_rendezvous(_py: Python, m: &PyModule) -> PyResult<()> {
+fn matrix_http_rendezvous_synapse(_py: Python, m: &PyModule) -> PyResult<()> {
     pyo3_log::init();
 
     m.add_class::<SynapseRendezvousModule>()?;

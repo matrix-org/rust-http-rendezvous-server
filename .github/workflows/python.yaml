@@ -1,0 +1,158 @@
+name: Python
+
+on:
+  push:
+    branches: [ main ]
+    tags: 
+      - "*"
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  collect-sdist:
+    name: "Collect sdist"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v3
+
+      - name: Install Python 3.10
+        uses: actions/setup-python@v4
+        id: cpy310
+        with:
+          python-version: "3.10"
+          architecture: x64
+
+      - name: Install build
+        run: pip install build
+
+      - name: Collect sdist
+        run: python -m build -o dist --sdist synapse
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v3
+        with:
+          name: sdist
+          path: dist
+
+  build-wheels:
+    name: "Build Python wheels"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            compatibility: manylinux2014 # Ignored on macOS
+
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            compatibility: manylinux2014 # Ignored on macOS
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            compatibility: manylinux2014
+
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            compatibility: manylinux2014
+
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            compatibility: musllinux_1_2
+
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            compatibility: musllinux_1_2
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v3
+
+      - name: Install Python 3.10
+        uses: actions/setup-python@v4
+        id: cpy310
+        with:
+          python-version: "3.10"
+          architecture: x64
+          update-environment: false
+
+      - name: Install maturin (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p "${HOME}/.local/bin"
+          curl -sL https://github.com/PyO3/maturin/releases/download/v0.13.6/maturin-x86_64-apple-darwin.tar.gz | tar xzf - -C "${HOME}/.local/bin"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install maturin (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p "${HOME}/.local/bin"
+          curl -sL https://github.com/PyO3/maturin/releases/download/v0.13.6/maturin-x86_64-unknown-linux-musl.tar.gz | tar xzf - -C "${HOME}/.local/bin"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v1
+        with:
+          version: 0.9.1
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          default: true
+          target: ${{ matrix.target }}
+
+      - name: Setup Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ matrix.target }}
+
+      - name: Build wheels
+        run: |
+          maturin build \
+            --release \
+            --out dist \
+            --manifest-path synapse/Cargo.toml \
+            -i ${{ steps.cpy310.outputs.python-path }} \
+            --compatibility ${{ matrix.compatibility }} \
+            --target ${{ matrix.target }} \
+            --zig
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v3
+        with:
+          name: wheels
+          path: dist
+
+  upload:
+    name: "Upload to PyPI"
+    runs-on: ubuntu-latest
+
+    permissions: {}
+    if: startsWith(github.ref, 'refs/tags')
+
+    needs: [ collect-sdist, build-wheels ]
+    steps:
+      - name: Download wheels
+        uses: actions/download-artifact@v3
+        with:
+          name: wheels
+          path: dist
+
+      - name: Download sdist
+        uses: actions/download-artifact@v3
+        with:
+          name: sdist
+          path: dist
+
+      - name: Publish distribution to PyPI
+        if: startsWith(github.ref, 'refs/tags')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
