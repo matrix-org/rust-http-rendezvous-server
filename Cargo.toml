@@ -1,7 +1,13 @@
 [package]
-name = "rendezvous"
+name = "matrix-http-rendezvous"
 version = "0.1.0"
+authors = ["Quentin Gliech <quenting@element.io>"]
 edition = "2021"
+license = "Apache-2.0"
+description = "A Tower service which implements MSC3886"
+repository = "https://github.com/matrix-org/rust-http-rendezvous-server/"
+rust-version = "1.61"
+exclude = ["/.github", ".gitignore"]
 
 [dependencies]
 axum = { version = "0.6.0-rc.2", features = ["headers"] }

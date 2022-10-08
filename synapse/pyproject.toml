@@ -3,20 +3,26 @@ requires = ["maturin>=0.13,<0.14"]
 build-backend = "maturin"
 
 [project]
-name = "synapse_rendezvous"
-version = "0.0.1"
+name = "matrix_http_rendezvous_synapse"
+version = "0.1.0"
 requires-python = ">=3.7"
 classifiers = [
+    "Development Status :: 3 - Alpha",
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
+    "License :: OSI Approved :: Apache Software License",
+    "Environment :: Plugins",
+]
+description = "A Matrix Synapse module which implements MSC3886"
+authors = [
+    { name = "Quentin Gliech", email = "quenting@element.io" }
 ]
 
-
 [tool.poetry]
-name = "synapse_rendezvous"
-version = "0.0.1"
-description = "A Rendez-Vous server module for Synapse"
+name = "matrix_http_rendezvous_synapse"
+version = "0.1.0"
+description = "A Matrix Synapse module which implements MSC3886"
 authors = ["Quentin Gliech <quenting@element.io>"]
 
 [tool.poetry.dependencies]

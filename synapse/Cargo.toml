@@ -1,12 +1,16 @@
 [package]
-name = "synapse_rendezvous"
+name = "matrix-http-rendezvous-synapse"
 version = "0.1.0"
+authors = ["Quentin Gliech <quenting@element.io>"]
 edition = "2021"
+license = "Apache-2.0"
+description = "A Matrix Synapse module which implements MSC3886"
+repository = "https://github.com/matrix-org/rust-http-rendezvous-server/"
+rust-version = "1.61"
 publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "synapse_rendezvous"
+name = "matrix_http_rendezvous_synapse"
 crate-type = ["cdylib"]
 
 [dependencies]
@@ -19,4 +23,4 @@ serde = { version = "1.0.145", features = ["derive"] }
 tower = { version = "0.4.13", features = ["util"] }
 tracing = { version = "0.1.37", features = ["log", "log-always"] }
 
-rendezvous = { path = "../" }
+matrix-http-rendezvous = { path = "../", version = "0.1.0" }

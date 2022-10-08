@@ -22,7 +22,7 @@ use std::net::SocketAddr;
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let app = rendezvous::router("");
+    let app = matrix_http_rendezvous::router("");
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
 
