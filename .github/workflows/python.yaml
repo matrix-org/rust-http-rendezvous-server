@@ -88,15 +88,15 @@ jobs:
           shared-key: ${{ matrix.target }}
 
       - name: Build wheels
-        run: >-
-          maturin build
-            --sdist
-            --release
-            --out dist
-            --manifest-path synapse/Cargo.toml
-            -i ${{ steps.cpy37.outputs.python-path }}
-            --compatibility ${{ matrix.compatibility }}
-            --target ${{ matrix.target }}
+        run: |
+          maturin build \
+            --sdist \
+            --release \
+            --out dist \
+            --manifest-path synapse/Cargo.toml \
+            -i ${{ steps.cpy37.outputs.python-path }} \
+            --compatibility ${{ matrix.compatibility }} \
+            --target ${{ matrix.target }} \
             --zig
 
       - name: Upload wheels
