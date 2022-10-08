@@ -82,6 +82,11 @@ jobs:
           default: true
           target: ${{ matrix.target }}
 
+      - name: Setup Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ${{ matrix.target }}
+
       - name: Build wheels
         run: >-
           maturin build
