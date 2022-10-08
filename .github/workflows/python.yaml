@@ -90,6 +90,8 @@ jobs:
 
       - name: Setup Zig
         uses: goto-bus-stop/setup-zig@v1
+        with:
+          version: 0.9.1
 
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
