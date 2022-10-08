@@ -18,7 +18,7 @@ cargo set-version --workspace --bump patch
 cd synapse/
 poetry version patch
 cd ..
-git commit -m "vX.Y.Z"
+git commit -a -m "vX.Y.Z"
 git tag vX.Y.Z
 git push
 git push --tags

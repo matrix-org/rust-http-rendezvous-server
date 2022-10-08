@@ -4,7 +4,6 @@ build-backend = "maturin"
 
 [project]
 name = "matrix_http_rendezvous_synapse"
-version = "0.1.0"
 requires-python = ">=3.7"
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -21,7 +20,7 @@ authors = [
 
 [tool.poetry]
 name = "matrix_http_rendezvous_synapse"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Matrix Synapse module which implements MSC3886"
 authors = ["Quentin Gliech <quenting@element.io>"]
 
