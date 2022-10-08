@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 anyhow = "1.0.65"
 http-body = "0.4.5"
-pyo3 = { version = "0.17.2", features = ["extension-module", "anyhow"] }
+pyo3 = { version = "0.17.2", features = ["extension-module", "abi3-py37", "anyhow"] }
 pyo3-log = "0.7.0"
 pyo3-matrix-synapse-module = "0.1.0"
 serde = { version = "1.0.145", features = ["derive"] }
