@@ -75,7 +75,7 @@ jobs:
         with:
           python-version: "3.10"
           architecture: x64
-          update-environment: false
+          update-environment: true
 
       - name: Setup Zig
         uses: goto-bus-stop/setup-zig@v1
