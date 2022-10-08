@@ -13,11 +13,11 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            target: x86_64-macos-darwin
+            target: x86_64-apple-darwin
             compatibility: ignored
 
           - os: macos-latest
-            target: aarch64-macos-darwin
+            target: aarch64-apple-darwin
             compatibility: ignored
 
           - os: ubuntu-latest
