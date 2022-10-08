@@ -12,6 +12,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  collect-sdist:
+    name: "Collect sdist"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v3
+
+      - name: Install Python 3.10
+        uses: actions/setup-python@v4
+        id: cpy310
+        with:
+          python-version: "3.10"
+          architecture: x64
+
+      - name: Install build
+        run: pip install build
+
+      - name: Collect sdist
+        run: python -m build -o dist --sdist synapse
+
+      - name: Upload sdist
+        uses: actions/upload-artifact@v3
+        with:
+          name: sdist
+          path: dist
+
   build-wheels:
     name: "Build Python wheels"
     strategy:
@@ -90,7 +116,6 @@ jobs:
       - name: Build wheels
         run: |
           maturin build \
-            --sdist \
             --release \
             --out dist \
             --manifest-path synapse/Cargo.toml \
@@ -109,20 +134,25 @@ jobs:
     name: "Upload to PyPI"
     runs-on: ubuntu-latest
 
-    # Publish on test PyPI on all push, and on regular PyPI on tags
-    if: github.event_name == 'push'
-
     permissions: {}
 
-    needs: [ build-wheels ]
+    needs: [ collect-sdist, build-wheels ]
     steps:
       - name: Download wheels
         uses: actions/download-artifact@v3
         with:
           name: wheels
 
+      - name: Download sdist
+        uses: actions/download-artifact@v3
+        with:
+          name: sdist
+
+      - run: find .
+
       - name: Publish distribution to Test PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        if: github.event_name == 'push'
         with:
           password: ${{ secrets.TEST_PYPI_API_TOKEN }}
           repository_url: https://test.pypi.org/legacy/
