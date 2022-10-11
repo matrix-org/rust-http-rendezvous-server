@@ -24,7 +24,7 @@ async fn main() {
 
     let app = matrix_http_rendezvous::router("");
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8090));
 
     hyper::Server::bind(&addr)
         .serve(app.into_make_service())

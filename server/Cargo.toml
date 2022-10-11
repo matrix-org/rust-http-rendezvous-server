@@ -1,6 +1,6 @@
 [package]
 name = "matrix-http-rendezvous-server"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Quentin Gliech <quenting@element.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -13,4 +13,4 @@ hyper = { version = "0.14.20", features = ["server"] }
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread"] }
 tracing-subscriber = "0.3.16"
 
-matrix-http-rendezvous = { path = "../", version = "0.1.1" }
+matrix-http-rendezvous = { path = "../", version = "0.1.2" }
