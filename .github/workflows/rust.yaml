@@ -192,14 +192,24 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: publish
-          args: --no-verify -p matrix-http-rendezvous
+          args: -p matrix-http-rendezvous
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Try publishing (dry-run) a few times, waiting for the index to propagate
+        run: |
+          for i in $(seq 1 30); do
+            if cargo publish --no-verify --dry-run -p matrix-http-rendezvous-server; then 
+              break
+            fi
+            echo "Attempt $i failed, retrying in 10s"
+            sleep 10
+          done
 
       - name: Publish matrix-http-rendezvous-server on crates.io
         uses: actions-rs/cargo@v1
         with:
           command: publish
-          args: --no-verify -p matrix-http-rendezvous-server
+          args: -p matrix-http-rendezvous-server
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
