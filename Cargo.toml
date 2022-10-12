@@ -19,7 +19,7 @@ sha2 = "0.10.6"
 time = "0.3.15"
 tokio = { version = "1.21.2", features = ["sync", "time"] }
 tower = { version = "0.4.13", features = ["util"] }
-tower-http = { version = "0.3.4", features = ["cors"] }
+tower-http = { version = "0.3.4", features = ["cors", "limit", "set-header"] }
 tracing = "0.1.37"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng", "serde"] }
 

@@ -26,7 +26,7 @@ use std::{
 
 use axum::{
     body::HttpBody,
-    extract::{ContentLengthLimit, FromRef, Path, State},
+    extract::{FromRef, Path, State},
     http::{
         header::{CONTENT_TYPE, ETAG, IF_MATCH, IF_NONE_MATCH, LOCATION},
         StatusCode,
@@ -37,16 +37,18 @@ use axum::{
 };
 use base64ct::Encoding;
 use bytes::Bytes;
-use headers::{ContentType, ETag, Expires, HeaderName, IfMatch, IfNoneMatch, LastModified};
+use headers::{
+    ContentType, ETag, Expires, HeaderName, HeaderValue, IfMatch, IfNoneMatch, LastModified,
+};
 use mime::Mime;
 use sha2::Digest;
 use tokio::sync::RwLock;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::{
+    cors::{Any, CorsLayer},
+    limit::RequestBodyLimitLayer,
+    set_header::SetResponseHeaderLayer,
+};
 use uuid::Uuid;
-
-// TODO: config?
-const MAX_BYTES: u64 = 4096;
-const TTL: Duration = Duration::from_secs(60);
 
 struct Session {
     hash: [u8; 32],
@@ -57,14 +59,14 @@ struct Session {
 }
 
 impl Session {
-    fn new(data: Bytes, content_type: Mime) -> Self {
+    fn new(data: Bytes, content_type: Mime, ttl: Duration) -> Self {
         let hash = sha2::Sha256::digest(&data).into();
         let now = SystemTime::now();
         Self {
             hash,
             data,
             content_type,
-            expires: now + TTL,
+            expires: now + ttl,
             last_modified: now,
         }
     }
@@ -113,6 +115,7 @@ impl Session {
 struct Sessions {
     // TODO: is that global lock alright?
     inner: Arc<RwLock<HashMap<Uuid, Session>>>,
+    ttl: Duration,
 }
 
 impl Sessions {
@@ -153,25 +156,19 @@ impl AppState {
 async fn new_session(
     State(sessions): State<Sessions>,
     content_type: Option<TypedHeader<ContentType>>,
-    // TODO: this requires a Content-Length header, is that alright?
-    ContentLengthLimit(payload): ContentLengthLimit<Bytes, MAX_BYTES>,
+    payload: Bytes,
 ) -> impl IntoResponse {
+    let ttl = sessions.ttl;
     // TODO: should we use something else? Check for colisions?
     let id = Uuid::new_v4();
     let content_type =
         content_type.map_or(mime::APPLICATION_OCTET_STREAM, |TypedHeader(c)| c.into());
-    let session = Session::new(payload, content_type);
+    let session = Session::new(payload, content_type, ttl);
     let headers = session.typed_headers();
-    sessions.insert(id, session, TTL).await;
+    sessions.insert(id, session, ttl).await;
 
     let location = id.to_string();
-    let additional_headers = [
-        (LOCATION, location),
-        (
-            HeaderName::from_static("x-max-bytes"),
-            MAX_BYTES.to_string(),
-        ),
-    ];
+    let additional_headers = [(LOCATION, location)];
     (StatusCode::CREATED, headers, additional_headers)
 }
 
@@ -188,7 +185,7 @@ async fn update_session(
     Path(id): Path<Uuid>,
     content_type: Option<TypedHeader<ContentType>>,
     if_match: Option<TypedHeader<IfMatch>>,
-    ContentLengthLimit(payload): ContentLengthLimit<Bytes, MAX_BYTES>,
+    payload: Bytes,
 ) -> Response {
     if let Some(session) = sessions.write().await.get_mut(&id) {
         if let Some(TypedHeader(if_match)) = if_match {
@@ -235,13 +232,16 @@ async fn get_session(
 }
 
 #[must_use]
-pub fn router<B>(prefix: &str) -> Router<(), B>
+pub fn router<B>(prefix: &str, ttl: Duration, max_bytes: usize) -> Router<(), B>
 where
     B: HttpBody + Send + 'static,
     <B as HttpBody>::Data: Send,
     <B as HttpBody>::Error: std::error::Error + Send + Sync,
 {
-    let sessions = Sessions::default();
+    let sessions = Sessions {
+        inner: Arc::default(),
+        ttl,
+    };
 
     let state = AppState::new(sessions);
     let router = Router::with_state(state)
@@ -251,13 +251,21 @@ where
             get(get_session).put(update_session).delete(delete_session),
         );
 
-    Router::new().nest(prefix, router).layer(
-        CorsLayer::new()
-            .allow_origin(Any)
-            .allow_methods(Any)
-            .allow_headers([CONTENT_TYPE, IF_MATCH, IF_NONE_MATCH])
-            .expose_headers([ETAG, LOCATION, HeaderName::from_static("x-max-bytes")]),
-    )
+    Router::new()
+        .nest(prefix, router)
+        .layer(RequestBodyLimitLayer::new(max_bytes))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            HeaderName::from_static("x-max-bytes"),
+            HeaderValue::from_str(&max_bytes.to_string())
+                .expect("Could not construct x-max-bytes header value"),
+        ))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Any)
+                .allow_methods(Any)
+                .allow_headers([CONTENT_TYPE, IF_MATCH, IF_NONE_MATCH])
+                .expose_headers([ETAG, LOCATION, HeaderName::from_static("x-max-bytes")]),
+        )
 }
 
 #[cfg(test)]
@@ -280,7 +288,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_post_and_get() {
-        let app = router("/");
+        let ttl = Duration::from_secs(60);
+        let app = router("/", ttl, 4096);
 
         let body = r#"{"hello": "world"}"#.to_string();
         let request = Request::post("/")
@@ -306,7 +315,7 @@ mod tests {
         assert_eq!(response.headers().get(ETAG).unwrap(), etag);
 
         // Let the entry expire
-        advance_time(TTL + Duration::from_secs(1)).await;
+        advance_time(ttl + Duration::from_secs(1)).await;
 
         let body = hyper::body::to_bytes(response.into_body()).await.unwrap();
         assert_eq!(&body[..], br#"{"hello": "world"}"#);
@@ -318,7 +327,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_post_and_get_if_none_match() {
-        let app = router("/");
+        let ttl = Duration::from_secs(60);
+        let app = router("/", ttl, 4096);
 
         let body = r#"{"hello": "world"}"#.to_string();
         let request = Request::post("/")
@@ -344,7 +354,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_post_and_put() {
-        let app = router("/");
+        let ttl = Duration::from_secs(60);
+        let app = router("/", ttl, 4096);
 
         let body = r#"{"hello": "world"}"#.to_string();
         let request = Request::post("/")
@@ -370,7 +381,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_post_and_put_if_match() {
-        let app = router("/");
+        let ttl = Duration::from_secs(60);
+        let app = router("/", ttl, 4096);
 
         let body = r#"{"hello": "world"}"#.to_string();
         let request = Request::post("/")
@@ -407,7 +419,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_post_delete_and_get() {
-        let app = router("/");
+        let ttl = Duration::from_secs(60);
+        let app = router("/", ttl, 4096);
 
         let body = r#"{"hello": "world"}"#.to_string();
         let request = Request::post("/")

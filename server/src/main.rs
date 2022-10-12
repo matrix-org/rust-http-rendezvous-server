@@ -17,7 +17,10 @@
 #![warn(clippy::pedantic)]
 
 use clap::Parser;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    time::Duration,
+};
 
 #[derive(Parser)]
 struct Options {
@@ -32,6 +35,14 @@ struct Options {
     /// Path prefix on which to mount the rendez-vous server
     #[arg(long)]
     prefix: Option<String>,
+
+    /// Time to live of entries, in seconds
+    #[arg(short, long, default_value_t = 60)]
+    ttl: u64,
+
+    /// Maximum payload size, in bytes
+    #[arg(short, long, default_value_t = 4096)]
+    max_bytes: usize,
 }
 
 #[tokio::main]
@@ -40,12 +51,18 @@ async fn main() {
 
     let options = Options::parse();
     let prefix = options.prefix.unwrap_or_default();
+    let ttl = Duration::from_secs(options.ttl);
 
     let addr = SocketAddr::from((options.address, options.port));
 
-    let service = matrix_http_rendezvous::router(&prefix);
+    let service = matrix_http_rendezvous::router(&prefix, ttl, options.max_bytes);
 
     tracing::info!("Listening on http://{addr}");
+    tracing::info!(
+        "TTL: {ttl}s – Maximum payload size: {max_bytes} bytes",
+        ttl = ttl.as_secs(),
+        max_bytes = options.max_bytes
+    );
 
     hyper::Server::bind(&addr)
         .serve(service.into_make_service())

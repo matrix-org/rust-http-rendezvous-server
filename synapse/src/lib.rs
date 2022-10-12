@@ -17,6 +17,8 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::needless_pass_by_value)]
 
+use std::time::Duration;
+
 use anyhow::anyhow;
 use http_body::Body;
 use pyo3::prelude::*;
@@ -25,10 +27,24 @@ use tower::ServiceExt;
 
 use pyo3_matrix_synapse_module::{parse_config, ModuleApi};
 
+fn default_ttl() -> u64 {
+    60
+}
+
+fn default_max_bytes() -> usize {
+    4096
+}
+
 #[pyclass]
 #[derive(Deserialize)]
 struct Config {
     prefix: String,
+
+    #[serde(default = "default_ttl")]
+    ttl: u64,
+
+    #[serde(default = "default_max_bytes")]
+    max_bytes: usize,
 }
 
 #[pyclass]
@@ -38,7 +54,8 @@ pub struct SynapseRendezvousModule;
 impl SynapseRendezvousModule {
     #[new]
     fn new(config: &Config, module_api: ModuleApi) -> PyResult<Self> {
-        let service = matrix_http_rendezvous::router(&config.prefix)
+        let ttl = Duration::from_secs(config.ttl);
+        let service = matrix_http_rendezvous::router(&config.prefix, ttl, config.max_bytes)
             .map_response(|res| res.map(|b| b.map_err(|e| anyhow!(e))));
 
         module_api.register_web_service(&config.prefix, service)?;
