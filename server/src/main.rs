@@ -16,6 +16,7 @@
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
 
+use bytesize::ByteSize;
 use clap::Parser;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -37,12 +38,12 @@ struct Options {
     prefix: Option<String>,
 
     /// Time to live of entries, in seconds
-    #[arg(short, long, default_value_t = 60)]
-    ttl: u64,
+    #[arg(short, long, default_value_t = Duration::from_secs(60).into())]
+    ttl: humantime::Duration,
 
     /// Maximum payload size, in bytes
-    #[arg(short, long, default_value_t = 4096)]
-    max_bytes: usize,
+    #[arg(short, long, default_value = "4KiB")]
+    max_bytes: ByteSize,
 }
 
 #[tokio::main]
@@ -51,17 +52,22 @@ async fn main() {
 
     let options = Options::parse();
     let prefix = options.prefix.unwrap_or_default();
-    let ttl = Duration::from_secs(options.ttl);
+    let ttl = options.ttl.into();
+    let max_bytes = options
+        .max_bytes
+        .0
+        .try_into()
+        .expect("Max bytes size too large");
 
     let addr = SocketAddr::from((options.address, options.port));
 
-    let service = matrix_http_rendezvous::router(&prefix, ttl, options.max_bytes);
+    let service = matrix_http_rendezvous::router(&prefix, ttl, max_bytes);
 
     tracing::info!("Listening on http://{addr}");
     tracing::info!(
-        "TTL: {ttl}s – Maximum payload size: {max_bytes} bytes",
-        ttl = ttl.as_secs(),
-        max_bytes = options.max_bytes
+        "TTL: {ttl} – Maximum payload size: {max_bytes}",
+        ttl = humantime::format_duration(ttl),
+        max_bytes = options.max_bytes.to_string_as(true)
     );
 
     hyper::Server::bind(&addr)

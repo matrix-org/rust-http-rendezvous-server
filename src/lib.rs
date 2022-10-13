@@ -26,7 +26,7 @@ use std::{
 
 use axum::{
     body::HttpBody,
-    extract::{FromRef, Path, State},
+    extract::{DefaultBodyLimit, FromRef, Path, State},
     http::{
         header::{CONTENT_TYPE, ETAG, IF_MATCH, IF_NONE_MATCH, LOCATION},
         StatusCode,
@@ -253,6 +253,7 @@ where
 
     Router::new()
         .nest(prefix, router)
+        .layer(DefaultBodyLimit::disable())
         .layer(RequestBodyLimitLayer::new(max_bytes))
         .layer(SetResponseHeaderLayer::if_not_present(
             HeaderName::from_static("x-max-bytes"),
@@ -270,13 +271,70 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::convert::Infallible;
+
     use super::*;
 
     use axum::http::{
         header::{CONTENT_LENGTH, CONTENT_TYPE},
         Request,
     };
+    use bytes::Buf;
     use tower::util::ServiceExt;
+
+    /// A slow body, which sends the bytes in small chunks (1 byte per chunk by default)
+    #[derive(Clone)]
+    struct SlowBody {
+        body: Bytes,
+        chunk_size: usize,
+    }
+
+    impl SlowBody {
+        const fn from_static(bytes: &'static [u8]) -> Self {
+            Self {
+                body: Bytes::from_static(bytes),
+                chunk_size: 1,
+            }
+        }
+
+        const fn from_bytes(body: Bytes) -> Self {
+            Self {
+                body,
+                chunk_size: 1,
+            }
+        }
+
+        const fn with_chunk_size(mut self, chunk_size: usize) -> Self {
+            self.chunk_size = chunk_size;
+            self
+        }
+    }
+
+    impl HttpBody for SlowBody {
+        type Data = Bytes;
+        type Error = Infallible;
+
+        fn poll_data(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Option<Result<Self::Data, Self::Error>>> {
+            if self.body.is_empty() {
+                std::task::Poll::Ready(None)
+            } else {
+                let size = self.chunk_size.min(self.body.len());
+                let ret = self.body.slice(0..size);
+                self.get_mut().body.advance(size);
+                std::task::Poll::Ready(Some(Ok(ret)))
+            }
+        }
+
+        fn poll_trailers(
+            self: std::pin::Pin<&mut Self>,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<Option<headers::HeaderMap>, Self::Error>> {
+            std::task::Poll::Ready(Ok(None))
+        }
+    }
 
     async fn advance_time(duration: Duration) {
         tokio::task::yield_now().await;
@@ -323,6 +381,63 @@ mod tests {
         let request = Request::get(&url).body(String::new()).unwrap();
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_post_max_bytes() {
+        let ttl = Duration::from_secs(60);
+
+        let body = br#"{"hello": "world"}"#;
+
+        // It doesn't work with a way too small size
+        let slow_body = SlowBody::from_static(body);
+        let request = Request::post("/")
+            .header(CONTENT_TYPE, "application/json")
+            .body(slow_body)
+            .unwrap();
+        let response = router("/", ttl, 8).oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+
+        // It works with exactly the right size
+        let slow_body = SlowBody::from_static(body);
+        let request = Request::post("/")
+            .header(CONTENT_TYPE, "application/json")
+            .body(slow_body)
+            .unwrap();
+        let response = router("/", ttl, body.len()).oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // It doesn't work even if the size is one too short
+        let slow_body = SlowBody::from_static(body);
+        let request = Request::post("/")
+            .header(CONTENT_TYPE, "application/json")
+            .body(slow_body)
+            .unwrap();
+        let response = router("/", ttl, body.len() - 1)
+            .oneshot(request)
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+
+        // Try with a big body (4MB), sent in small 128 bytes chunks
+        let body = vec![42; 4 * 1024 * 1024].into_boxed_slice();
+        let slow_body = SlowBody::from_bytes(Bytes::from(body)).with_chunk_size(128);
+        let request = Request::post("/").body(slow_body).unwrap();
+        let response = router("/", ttl, 4 * 1024 * 1024)
+            .oneshot(request)
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CREATED);
+
+        // Try with a big body (4MB + 1B), sent in small 128 bytes chunks
+        let body = vec![42; 4 * 1024 * 1024 + 1].into_boxed_slice();
+        let slow_body = SlowBody::from_bytes(Bytes::from(body)).with_chunk_size(128);
+        let request = Request::post("/").body(slow_body).unwrap();
+        let response = router("/", ttl, 4 * 1024 * 1024)
+            .oneshot(request)
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
     }
 
     #[tokio::test]

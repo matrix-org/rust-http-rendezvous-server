@@ -19,7 +19,8 @@
 
 use std::time::Duration;
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
+use bytesize::ByteSize;
 use http_body::Body;
 use pyo3::prelude::*;
 use serde::Deserialize;
@@ -27,12 +28,12 @@ use tower::ServiceExt;
 
 use pyo3_matrix_synapse_module::{parse_config, ModuleApi};
 
-fn default_ttl() -> u64 {
-    60
+fn default_ttl() -> Duration {
+    Duration::from_secs(60)
 }
 
-fn default_max_bytes() -> usize {
-    4096
+fn default_max_bytes() -> ByteSize {
+    ByteSize::kib(4)
 }
 
 #[pyclass]
@@ -40,11 +41,11 @@ fn default_max_bytes() -> usize {
 struct Config {
     prefix: String,
 
-    #[serde(default = "default_ttl")]
-    ttl: u64,
+    #[serde(default = "default_ttl", with = "humantime_serde")]
+    ttl: Duration,
 
     #[serde(default = "default_max_bytes")]
-    max_bytes: usize,
+    max_bytes: ByteSize,
 }
 
 #[pyclass]
@@ -54,10 +55,21 @@ pub struct SynapseRendezvousModule;
 impl SynapseRendezvousModule {
     #[new]
     fn new(config: &Config, module_api: ModuleApi) -> PyResult<Self> {
-        let ttl = Duration::from_secs(config.ttl);
-        let service = matrix_http_rendezvous::router(&config.prefix, ttl, config.max_bytes)
-            .map_response(|res| res.map(|b| b.map_err(|e| anyhow!(e))));
+        tracing::info!(
+            "Mounting rendez-vous server on {prefix}, with a TTL of {ttl} and max payload size of {max_bytes}",
+            prefix = config.prefix,
+            ttl = humantime::format_duration(config.ttl),
+            max_bytes = config.max_bytes.to_string_as(true),
+        );
 
+        let max_bytes = config
+            .max_bytes
+            .0
+            .try_into()
+            .context("Could not convert max_bytes from config")?;
+
+        let service = matrix_http_rendezvous::router(&config.prefix, config.ttl, max_bytes)
+            .map_response(|res| res.map(|b| b.map_err(|e| anyhow!(e))));
         module_api.register_web_service(&config.prefix, service)?;
         Ok(Self)
     }
