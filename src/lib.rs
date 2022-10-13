@@ -42,7 +42,7 @@ use headers::{
 };
 use mime::Mime;
 use sha2::Digest;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tower_http::{
     cors::{Any, CorsLayer},
     limit::RequestBodyLimitLayer,
@@ -116,6 +116,7 @@ struct Sessions {
     // TODO: is that global lock alright?
     inner: Arc<RwLock<HashMap<Ulid, Session>>>,
     ttl: Duration,
+    generator: Arc<Mutex<ulid::Generator>>,
 }
 
 impl Sessions {
@@ -126,6 +127,16 @@ impl Sessions {
             tokio::time::sleep(ttl).await;
             self.inner.write().await.remove(&id);
         });
+    }
+
+    async fn generate_id(&self) -> Ulid {
+        self.generator
+            .lock()
+            .await
+            .generate()
+            // This would panic the thread if too many IDs (more than 2^40) are generated on the same
+            // millisecond, which is very unlikely
+            .expect("Failed to generate random ID")
     }
 }
 
@@ -159,7 +170,9 @@ async fn new_session(
     payload: Bytes,
 ) -> impl IntoResponse {
     let ttl = sessions.ttl;
-    let id = Ulid::new();
+
+    let id = sessions.generate_id().await;
+
     let content_type =
         content_type.map_or(mime::APPLICATION_OCTET_STREAM, |TypedHeader(c)| c.into());
     let session = Session::new(payload, content_type, ttl);
@@ -240,6 +253,7 @@ where
     let sessions = Sessions {
         inner: Arc::default(),
         ttl,
+        generator: Arc::default(),
     };
 
     let state = AppState::new(sessions);
@@ -380,6 +394,40 @@ mod tests {
         let request = Request::get(&url).body(String::new()).unwrap();
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_monotonically_increasing() {
+        let ttl = Duration::from_secs(60);
+        let app = router("/", ttl, 4096);
+
+        // Prepare a thousand requests
+        let mut requests = Vec::with_capacity(1000);
+        for _ in 0..requests.capacity() {
+            requests.push(
+                app.clone()
+                    .oneshot(Request::post("/").body(String::new()).unwrap()),
+            );
+        }
+
+        // Run them all in order
+        let mut responses = Vec::with_capacity(requests.len());
+        for fut in requests {
+            responses.push(fut.await);
+        }
+
+        // Get the location out of them
+        let ids: Vec<_> = responses
+            .iter()
+            .map(|res| {
+                let res = res.as_ref().unwrap();
+                assert_eq!(res.status(), StatusCode::CREATED);
+                res.headers().get(LOCATION).unwrap().to_str().unwrap()
+            })
+            .collect();
+
+        // Check that all the IDs are monotonically increasing
+        assert!(ids.windows(2).all(|loc| loc[0] < loc[1]));
     }
 
     #[tokio::test]
