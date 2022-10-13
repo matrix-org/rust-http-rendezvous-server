@@ -17,12 +17,5 @@ For instructions on usage as a Synapse module, see [matrix-http-rendezvous-synap
 ### Releasing
 
 ```sh
-git checkout main
-cargo set-version --workspace --bump patch
-cd synapse/
-poetry version patch
-cd ..
-git commit -a -m "vX.Y.Z"
-git tag vX.Y.Z
-git push
-git push --tags
+./release.sh patch
+```
