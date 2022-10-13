@@ -21,7 +21,7 @@ humantime = "2.1.0"
 humantime-serde = "1.1.1"
 pyo3 = { version = "0.17.2", features = ["extension-module", "abi3-py37", "anyhow"] }
 pyo3-log = "0.7.0"
-pyo3-matrix-synapse-module = "0.1.0"
+pyo3-matrix-synapse-module = "0.1.1"
 serde = { version = "1.0.145", features = ["derive"] }
 tower = { version = "0.4.13", features = ["util"] }
 tracing = { version = "0.1.37", features = ["log", "log-always"] }
