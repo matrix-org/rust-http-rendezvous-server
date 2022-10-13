@@ -41,6 +41,10 @@ struct Options {
     #[arg(short, long, default_value_t = Duration::from_secs(60).into())]
     ttl: humantime::Duration,
 
+    /// Maximum number of entries to store
+    #[arg(short, long, default_value_t = 10000)]
+    capacity: usize,
+
     /// Maximum payload size, in bytes
     #[arg(short, long, default_value = "4KiB")]
     max_bytes: ByteSize,
@@ -59,9 +63,12 @@ async fn main() {
         .try_into()
         .expect("Max bytes size too large");
 
+    let sessions = matrix_http_rendezvous::Sessions::new(ttl, options.capacity);
+    tokio::spawn(sessions.eviction_task(Duration::from_secs(60)));
+
     let addr = SocketAddr::from((options.address, options.port));
 
-    let service = matrix_http_rendezvous::router(&prefix, ttl, max_bytes);
+    let service = matrix_http_rendezvous::router(&prefix, sessions, max_bytes);
 
     tracing::info!("Listening on http://{addr}");
     tracing::info!(

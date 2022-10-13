@@ -18,8 +18,8 @@
 #![allow(clippy::trait_duplication_in_bounds)]
 
 use std::{
-    collections::HashMap,
-    ops::Deref,
+    collections::BTreeMap,
+    future::Future,
     sync::Arc,
     time::{Duration, SystemTime},
 };
@@ -112,16 +112,54 @@ impl Session {
 }
 
 #[derive(Clone, Default)]
-struct Sessions {
-    // TODO: is that global lock alright?
-    inner: Arc<RwLock<HashMap<Ulid, Session>>>,
-    ttl: Duration,
+pub struct Sessions {
+    inner: Arc<RwLock<BTreeMap<Ulid, Session>>>,
     generator: Arc<Mutex<ulid::Generator>>,
+    capacity: usize,
+    hard_capacity: usize,
+    ttl: Duration,
+}
+
+fn evict(sessions: &mut BTreeMap<Ulid, Session>, capacity: usize) {
+    // NOTE: eviction is based on the fact that ULIDs are monotonically increasing, by evictin the
+    // keys at the head of the map
+
+    // List of keys to evict
+    let keys: Vec<Ulid> = sessions
+        .keys()
+        .take(sessions.len() - capacity)
+        .copied()
+        .collect();
+
+    // Now evict the keys
+    for key in keys {
+        sessions.remove(&key);
+    }
 }
 
 impl Sessions {
+    #[must_use]
+    pub fn new(ttl: Duration, capacity: usize) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(BTreeMap::new())),
+            generator: Arc::new(Mutex::new(ulid::Generator::new())),
+            ttl,
+            capacity,
+            hard_capacity: capacity * 2,
+        }
+    }
+
     async fn insert(self, id: Ulid, session: Session, ttl: Duration) {
-        self.inner.write().await.insert(id, session);
+        {
+            let mut sessions = self.inner.write().await;
+            sessions.insert(id, session);
+            // When inserting, we check if we hit the 'hard' capacity, so that we never go over
+            // that capacity
+            if sessions.len() >= self.hard_capacity {
+                evict(&mut sessions, self.capacity);
+            }
+        }
+
         // TODO: cancel this task when an item gets deleted
         tokio::task::spawn(async move {
             tokio::time::sleep(ttl).await;
@@ -138,13 +176,29 @@ impl Sessions {
             // millisecond, which is very unlikely
             .expect("Failed to generate random ID")
     }
-}
 
-impl Deref for Sessions {
-    type Target = RwLock<HashMap<Ulid, Session>>;
+    /// A loop which evicts keys if the capacity is reached
+    pub fn eviction_task(
+        &self,
+        interval: Duration,
+    ) -> impl Future<Output = ()> + Send + Sync + 'static {
+        let this = self.clone();
+        async move {
+            let mut interval = tokio::time::interval(interval);
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-    fn deref(&self) -> &Self::Target {
-        &self.inner
+            loop {
+                interval.tick().await;
+                this.evict().await;
+            }
+        }
+    }
+
+    async fn evict(&self) {
+        if self.inner.read().await.len() > self.capacity {
+            let mut sessions = self.inner.write().await;
+            evict(&mut sessions, self.capacity);
+        }
     }
 }
 
@@ -185,7 +239,7 @@ async fn new_session(
 }
 
 async fn delete_session(State(sessions): State<Sessions>, Path(id): Path<Ulid>) -> StatusCode {
-    if sessions.write().await.remove(&id).is_some() {
+    if sessions.inner.write().await.remove(&id).is_some() {
         StatusCode::NO_CONTENT
     } else {
         StatusCode::NOT_FOUND
@@ -199,7 +253,7 @@ async fn update_session(
     if_match: Option<TypedHeader<IfMatch>>,
     payload: Bytes,
 ) -> Response {
-    if let Some(session) = sessions.write().await.get_mut(&id) {
+    if let Some(session) = sessions.inner.write().await.get_mut(&id) {
         if let Some(TypedHeader(if_match)) = if_match {
             if !if_match.precondition_passes(&session.etag()) {
                 return (StatusCode::PRECONDITION_FAILED, session.typed_headers()).into_response();
@@ -221,7 +275,7 @@ async fn get_session(
     Path(id): Path<Ulid>,
     if_none_match: Option<TypedHeader<IfNoneMatch>>,
 ) -> Response {
-    let sessions = sessions.read().await;
+    let sessions = sessions.inner.read().await;
     let session = if let Some(session) = sessions.get(&id) {
         session
     } else {
@@ -244,18 +298,12 @@ async fn get_session(
 }
 
 #[must_use]
-pub fn router<B>(prefix: &str, ttl: Duration, max_bytes: usize) -> Router<(), B>
+pub fn router<B>(prefix: &str, sessions: Sessions, max_bytes: usize) -> Router<(), B>
 where
     B: HttpBody + Send + 'static,
     <B as HttpBody>::Data: Send,
     <B as HttpBody>::Error: std::error::Error + Send + Sync,
 {
-    let sessions = Sessions {
-        inner: Arc::default(),
-        ttl,
-        generator: Arc::default(),
-    };
-
     let state = AppState::new(sessions);
     let router = Router::with_state(state)
         .route("/", post(new_session))
@@ -360,7 +408,8 @@ mod tests {
     #[tokio::test]
     async fn test_post_and_get() {
         let ttl = Duration::from_secs(60);
-        let app = router("/", ttl, 4096);
+        let sessions = Sessions::new(ttl, 1024);
+        let app = router("/", sessions, 4096);
 
         let body = r#"{"hello": "world"}"#.to_string();
         let request = Request::post("/")
@@ -399,7 +448,8 @@ mod tests {
     #[tokio::test]
     async fn test_monotonically_increasing() {
         let ttl = Duration::from_secs(60);
-        let app = router("/", ttl, 4096);
+        let sessions = Sessions::new(ttl, 1024);
+        let app = router("/", sessions.clone(), 4096);
 
         // Prepare a thousand requests
         let mut requests = Vec::with_capacity(1000);
@@ -433,6 +483,7 @@ mod tests {
     #[tokio::test]
     async fn test_post_max_bytes() {
         let ttl = Duration::from_secs(60);
+        let sessions = Sessions::new(ttl, 1024);
 
         let body = br#"{"hello": "world"}"#;
 
@@ -442,7 +493,10 @@ mod tests {
             .header(CONTENT_TYPE, "application/json")
             .body(slow_body)
             .unwrap();
-        let response = router("/", ttl, 8).oneshot(request).await.unwrap();
+        let response = router("/", sessions.clone(), 8)
+            .oneshot(request)
+            .await
+            .unwrap();
         assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
 
         // It works with exactly the right size
@@ -451,7 +505,10 @@ mod tests {
             .header(CONTENT_TYPE, "application/json")
             .body(slow_body)
             .unwrap();
-        let response = router("/", ttl, body.len()).oneshot(request).await.unwrap();
+        let response = router("/", sessions.clone(), body.len())
+            .oneshot(request)
+            .await
+            .unwrap();
         assert_eq!(response.status(), StatusCode::CREATED);
 
         // It doesn't work even if the size is one too short
@@ -460,7 +517,7 @@ mod tests {
             .header(CONTENT_TYPE, "application/json")
             .body(slow_body)
             .unwrap();
-        let response = router("/", ttl, body.len() - 1)
+        let response = router("/", sessions.clone(), body.len() - 1)
             .oneshot(request)
             .await
             .unwrap();
@@ -470,7 +527,7 @@ mod tests {
         let body = vec![42; 4 * 1024 * 1024].into_boxed_slice();
         let slow_body = SlowBody::from_bytes(Bytes::from(body)).with_chunk_size(128);
         let request = Request::post("/").body(slow_body).unwrap();
-        let response = router("/", ttl, 4 * 1024 * 1024)
+        let response = router("/", sessions.clone(), 4 * 1024 * 1024)
             .oneshot(request)
             .await
             .unwrap();
@@ -480,7 +537,7 @@ mod tests {
         let body = vec![42; 4 * 1024 * 1024 + 1].into_boxed_slice();
         let slow_body = SlowBody::from_bytes(Bytes::from(body)).with_chunk_size(128);
         let request = Request::post("/").body(slow_body).unwrap();
-        let response = router("/", ttl, 4 * 1024 * 1024)
+        let response = router("/", sessions.clone(), 4 * 1024 * 1024)
             .oneshot(request)
             .await
             .unwrap();
@@ -490,7 +547,8 @@ mod tests {
     #[tokio::test]
     async fn test_post_and_get_if_none_match() {
         let ttl = Duration::from_secs(60);
-        let app = router("/", ttl, 4096);
+        let sessions = Sessions::new(ttl, 1024);
+        let app = router("/", sessions, 4096);
 
         let body = r#"{"hello": "world"}"#.to_string();
         let request = Request::post("/")
@@ -517,7 +575,8 @@ mod tests {
     #[tokio::test]
     async fn test_post_and_put() {
         let ttl = Duration::from_secs(60);
-        let app = router("/", ttl, 4096);
+        let sessions = Sessions::new(ttl, 1024);
+        let app = router("/", sessions, 4096);
 
         let body = r#"{"hello": "world"}"#.to_string();
         let request = Request::post("/")
@@ -544,7 +603,8 @@ mod tests {
     #[tokio::test]
     async fn test_post_and_put_if_match() {
         let ttl = Duration::from_secs(60);
-        let app = router("/", ttl, 4096);
+        let sessions = Sessions::new(ttl, 1024);
+        let app = router("/", sessions, 4096);
 
         let body = r#"{"hello": "world"}"#.to_string();
         let request = Request::post("/")
@@ -582,7 +642,8 @@ mod tests {
     #[tokio::test]
     async fn test_post_delete_and_get() {
         let ttl = Duration::from_secs(60);
-        let app = router("/", ttl, 4096);
+        let sessions = Sessions::new(ttl, 1024);
+        let app = router("/", sessions, 4096);
 
         let body = r#"{"hello": "world"}"#.to_string();
         let request = Request::post("/")
@@ -606,6 +667,72 @@ mod tests {
 
         let request = Request::get(&url).body(String::new()).unwrap();
         let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_eviction() {
+        let ttl = Duration::from_secs(60);
+        let sessions = Sessions::new(ttl, 2);
+        let app = router("/", sessions.clone(), 4096);
+
+        let request = Request::post("/").body(String::new()).unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        let first_location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
+
+        let request = Request::post("/").body(String::new()).unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        let second_location = response.headers().get(LOCATION).unwrap().to_str().unwrap();
+
+        sessions.evict().await;
+
+        // Both entries are still there
+        let url = format!("/{first_location}");
+        let request = Request::get(&url).body(String::new()).unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let url = format!("/{second_location}");
+        let request = Request::get(&url).body(String::new()).unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Sending a third request
+        let request = Request::post("/").body(String::new()).unwrap();
+        app.clone().oneshot(request).await.unwrap();
+
+        // First entry should still be there, there was no eviction yet because we didn't hit hard
+        // capacity
+        let url = format!("/{first_location}");
+        let request = Request::get(&url).body(String::new()).unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        sessions.evict().await;
+
+        // First entry should be gone because of the eviction
+        let url = format!("/{first_location}");
+        let request = Request::get(&url).body(String::new()).unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+        // Second entry should still be there
+        let url = format!("/{second_location}");
+        let request = Request::get(&url).body(String::new()).unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        // Sending two other requests, so we hit hard capacity
+        let request = Request::post("/").body(String::new()).unwrap();
+        app.clone().oneshot(request).await.unwrap();
+        let request = Request::post("/").body(String::new()).unwrap();
+        app.clone().oneshot(request).await.unwrap();
+
+        // Second entry should be gone, because we hit hard capacity, even though we didn't had the
+        // eviction triggered
+        let url = format!("/{second_location}");
+        let request = Request::get(&url).body(String::new()).unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }
