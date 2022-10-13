@@ -35,8 +35,8 @@ Configuration options
 
 Apart from the `prefix` the following config options are available:
 
-- `ttl`: The time-to-live of the rendezvous session in seconds. Defaults to 60.
-- `max_bytes`: The maximum number of bytes that can be sent in a single request. Defaults to 4096.
+- `ttl`: The time-to-live of the rendezvous session. Defaults to 60s.
+- `max_bytes`: The maximum number of bytes that can be sent in a single request. Defaults to 4096 bytes.
 
 An example configuration setting these and a custom prefix would like::
 
@@ -44,8 +44,8 @@ An example configuration setting these and a custom prefix would like::
       - module: matrix_http_rendezvous_synapse.SynapseRendezvousModule
         config:
           prefix: /rendezvous
-          ttl: 15                   # seconds
-          max_bytes: 10240          # 10 KiB
+          ttl: 15s
+          max_bytes: 10KiB
 
     experimental_features:
       msc3886_endpoint: /rendezvous # this should match above
