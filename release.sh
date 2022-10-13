@@ -34,7 +34,6 @@ run git status
 printf "About to commit and push version %s. Are you sure? " "${VERSION}"
 read -r REPLY
 
-set -x
 case "${REPLY}" in
   y|Y|yes|Yes|YES) 
     run git commit -a -m "${VERSION}"
