@@ -36,6 +36,10 @@ fn default_max_bytes() -> ByteSize {
     ByteSize::kib(4)
 }
 
+fn default_max_entries() -> usize {
+    10_000
+}
+
 #[pyclass]
 #[derive(Deserialize)]
 struct Config {
@@ -46,6 +50,9 @@ struct Config {
 
     #[serde(default = "default_max_bytes")]
     max_bytes: ByteSize,
+
+    #[serde(default = "default_max_entries")]
+    max_entries: usize,
 }
 
 #[pyclass]
@@ -68,7 +75,10 @@ impl SynapseRendezvousModule {
             .try_into()
             .context("Could not convert max_bytes from config")?;
 
-        let service = matrix_http_rendezvous::router(&config.prefix, config.ttl, max_bytes)
+        let sessions = matrix_http_rendezvous::Sessions::new(config.ttl, config.max_entries);
+        tokio::spawn(sessions.eviction_task(Duration::from_secs(60)));
+
+        let service = matrix_http_rendezvous::router(&config.prefix, sessions, max_bytes)
             .map_response(|res| res.map(|b| b.map_err(|e| anyhow!(e))));
         module_api.register_web_service(&config.prefix, service)?;
         Ok(Self)

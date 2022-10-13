@@ -41,9 +41,17 @@ struct Options {
     #[arg(short, long, default_value_t = Duration::from_secs(60).into())]
     ttl: humantime::Duration,
 
+    /// Maximum number of entries to store
+    #[arg(short, long, default_value_t = 10000)]
+    capacity: usize,
+
     /// Maximum payload size, in bytes
     #[arg(short, long, default_value = "4KiB")]
     max_bytes: ByteSize,
+
+    /// Set this flag to test how much memory the server might use with a sessions map fully loaded
+    #[arg(long)]
+    mem_check: bool,
 }
 
 #[tokio::main]
@@ -59,9 +67,25 @@ async fn main() {
         .try_into()
         .expect("Max bytes size too large");
 
+    let sessions = matrix_http_rendezvous::Sessions::new(ttl, options.capacity);
+
+    if options.mem_check {
+        tracing::info!(
+            "Filling cache with {capacity} entries of {max_bytes}",
+            capacity = options.capacity,
+            max_bytes = options.max_bytes.to_string_as(true)
+        );
+        sessions.fill_for_mem_check(max_bytes).await;
+        tracing::info!("Done filling, waiting 60 seconds");
+        tokio::time::sleep(Duration::from_secs(60)).await;
+        return;
+    }
+
+    tokio::spawn(sessions.eviction_task(Duration::from_secs(60)));
+
     let addr = SocketAddr::from((options.address, options.port));
 
-    let service = matrix_http_rendezvous::router(&prefix, ttl, max_bytes);
+    let service = matrix_http_rendezvous::router(&prefix, sessions, max_bytes);
 
     tracing::info!("Listening on http://{addr}");
     tracing::info!(
