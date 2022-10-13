@@ -200,6 +200,25 @@ impl Sessions {
             evict(&mut sessions, self.capacity);
         }
     }
+
+    /// Fill the sessions storage to check how much memory it might use on max capacity
+    ///
+    /// # Panics
+    ///
+    /// It panics if the session storage is not empty
+    pub async fn fill_for_mem_check(&self, entry_size: usize) {
+        let mut sessions = self.inner.write().await;
+        let mut generator = self.generator.lock().await;
+        assert!(sessions.is_empty());
+
+        let data: Vec<u8> = std::iter::repeat(42).take(entry_size).collect();
+        sessions.extend((0..self.capacity).map(|_| {
+            let data = Bytes::from(data.clone());
+            let id = generator.generate().unwrap();
+            let session = Session::new(data, mime::APPLICATION_OCTET_STREAM, self.ttl);
+            (id, session)
+        }));
+    }
 }
 
 impl FromRef<AppState> for Sessions {
