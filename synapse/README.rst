@@ -37,6 +37,7 @@ Apart from the `prefix` the following config options are available:
 
 - `ttl`: The time-to-live of the rendezvous session. Defaults to 60s.
 - `max_bytes`: The maximum number of bytes that can be sent in a single request. Defaults to 4096 bytes.
+- `max_entries`: The maximum number of entries to keep. Defaults to 10 000.
 
 An example configuration setting these and a custom prefix would like::
 
@@ -46,6 +47,7 @@ An example configuration setting these and a custom prefix would like::
           prefix: /rendezvous
           ttl: 15s
           max_bytes: 10KiB
+          max_entries: 50000
 
     experimental_features:
       msc3886_endpoint: /rendezvous # this should match above

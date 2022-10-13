@@ -218,6 +218,16 @@ impl Sessions {
             let session = Session::new(data, mime::APPLICATION_OCTET_STREAM, self.ttl);
             (id, session)
         }));
+
+        // Start the deletion tasks for all the sessions
+        let ttl = self.ttl;
+        for &key in sessions.keys() {
+            let inner = self.inner.clone();
+            tokio::task::spawn(async move {
+                tokio::time::sleep(ttl).await;
+                inner.write().await.remove(&key);
+            });
+        }
     }
 }
 
