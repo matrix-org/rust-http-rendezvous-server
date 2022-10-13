@@ -48,7 +48,7 @@ use tower_http::{
     limit::RequestBodyLimitLayer,
     set_header::SetResponseHeaderLayer,
 };
-use uuid::Uuid;
+use ulid::Ulid;
 
 struct Session {
     hash: [u8; 32],
@@ -114,12 +114,12 @@ impl Session {
 #[derive(Clone, Default)]
 struct Sessions {
     // TODO: is that global lock alright?
-    inner: Arc<RwLock<HashMap<Uuid, Session>>>,
+    inner: Arc<RwLock<HashMap<Ulid, Session>>>,
     ttl: Duration,
 }
 
 impl Sessions {
-    async fn insert(self, id: Uuid, session: Session, ttl: Duration) {
+    async fn insert(self, id: Ulid, session: Session, ttl: Duration) {
         self.inner.write().await.insert(id, session);
         // TODO: cancel this task when an item gets deleted
         tokio::task::spawn(async move {
@@ -130,7 +130,7 @@ impl Sessions {
 }
 
 impl Deref for Sessions {
-    type Target = RwLock<HashMap<Uuid, Session>>;
+    type Target = RwLock<HashMap<Ulid, Session>>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
@@ -159,8 +159,7 @@ async fn new_session(
     payload: Bytes,
 ) -> impl IntoResponse {
     let ttl = sessions.ttl;
-    // TODO: should we use something else? Check for colisions?
-    let id = Uuid::new_v4();
+    let id = Ulid::new();
     let content_type =
         content_type.map_or(mime::APPLICATION_OCTET_STREAM, |TypedHeader(c)| c.into());
     let session = Session::new(payload, content_type, ttl);
@@ -172,7 +171,7 @@ async fn new_session(
     (StatusCode::CREATED, headers, additional_headers)
 }
 
-async fn delete_session(State(sessions): State<Sessions>, Path(id): Path<Uuid>) -> StatusCode {
+async fn delete_session(State(sessions): State<Sessions>, Path(id): Path<Ulid>) -> StatusCode {
     if sessions.write().await.remove(&id).is_some() {
         StatusCode::NO_CONTENT
     } else {
@@ -182,7 +181,7 @@ async fn delete_session(State(sessions): State<Sessions>, Path(id): Path<Uuid>) 
 
 async fn update_session(
     State(sessions): State<Sessions>,
-    Path(id): Path<Uuid>,
+    Path(id): Path<Ulid>,
     content_type: Option<TypedHeader<ContentType>>,
     if_match: Option<TypedHeader<IfMatch>>,
     payload: Bytes,
@@ -206,7 +205,7 @@ async fn update_session(
 
 async fn get_session(
     State(sessions): State<Sessions>,
-    Path(id): Path<Uuid>,
+    Path(id): Path<Ulid>,
     if_none_match: Option<TypedHeader<IfNoneMatch>>,
 ) -> Response {
     let sessions = sessions.read().await;

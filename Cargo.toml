@@ -21,7 +21,7 @@ tokio = { version = "1.21.2", features = ["sync", "time"] }
 tower = { version = "0.4.13", features = ["util"] }
 tower-http = { version = "0.3.4", features = ["cors", "limit", "set-header"] }
 tracing = "0.1.37"
-uuid = { version = "1.1.2", features = ["v4", "fast-rng", "serde"] }
+ulid = { version = "1.0.0", features = ["serde"] }
 
 [dev-dependencies]
 hyper = "0.14.20"
