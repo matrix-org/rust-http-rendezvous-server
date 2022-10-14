@@ -26,6 +26,7 @@ use clap::Parser;
 use matrix_http_rendezvous::{DEFAULT_MAX_BYTES_STR, DEFAULT_MAX_ENTRIES, DEFAULT_TTL};
 
 #[derive(Parser)]
+#[command(version, about)]
 struct Options {
     /// Address on which to listen
     #[arg(short, long, default_value_t = IpAddr::V4(Ipv4Addr::LOCALHOST))]
