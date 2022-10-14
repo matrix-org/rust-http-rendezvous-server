@@ -76,7 +76,7 @@ impl SynapseRendezvousModule {
             .context("Could not convert max_bytes from config")?;
 
         let sessions = matrix_http_rendezvous::Sessions::new(config.ttl, config.max_entries);
-        tokio::spawn(sessions.eviction_task(Duration::from_secs(60)));
+        pyo3_asyncio::tokio::get_runtime().spawn(sessions.eviction_task(Duration::from_secs(60)));
 
         let service = matrix_http_rendezvous::router(&config.prefix, sessions, max_bytes)
             .map_response(|res| res.map(|b| b.map_err(|e| anyhow!(e))));
