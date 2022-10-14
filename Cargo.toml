@@ -1,6 +1,6 @@
 [package]
 name = "matrix-http-rendezvous"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Quentin Gliech <quenting@element.io>"]
 edition = "2021"
 license = "Apache-2.0"

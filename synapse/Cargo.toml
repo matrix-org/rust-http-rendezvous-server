@@ -1,6 +1,6 @@
 [package]
 name = "matrix-http-rendezvous-synapse"
-version = "0.1.6"
+version = "0.1.7"
 authors = ["Quentin Gliech <quenting@element.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -28,4 +28,4 @@ tokio = "1.21.2"
 tower = { version = "0.4.13", features = ["util"] }
 tracing = { version = "0.1.37", features = ["log", "log-always"] }
 
-matrix-http-rendezvous = { path = "../", version = "0.1.6" }
+matrix-http-rendezvous = { path = "../", version = "0.1.7" }
