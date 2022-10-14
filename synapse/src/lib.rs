@@ -22,22 +22,22 @@ use std::time::Duration;
 use anyhow::{anyhow, Context};
 use bytesize::ByteSize;
 use http_body::Body;
+use matrix_http_rendezvous::{DEFAULT_MAX_BYTES, DEFAULT_MAX_ENTRIES, DEFAULT_TTL};
 use pyo3::prelude::*;
+use pyo3_matrix_synapse_module::{parse_config, ModuleApi};
 use serde::Deserialize;
 use tower::ServiceExt;
 
-use pyo3_matrix_synapse_module::{parse_config, ModuleApi};
-
-fn default_ttl() -> Duration {
-    Duration::from_secs(60)
+const fn default_ttl() -> Duration {
+    DEFAULT_TTL
 }
 
-fn default_max_bytes() -> ByteSize {
-    ByteSize::kib(4)
+const fn default_max_bytes() -> ByteSize {
+    ByteSize(DEFAULT_MAX_BYTES as u64)
 }
 
-fn default_max_entries() -> usize {
-    10_000
+const fn default_max_entries() -> usize {
+    DEFAULT_MAX_ENTRIES
 }
 
 #[pyclass]

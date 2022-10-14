@@ -16,12 +16,14 @@
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
 
-use bytesize::ByteSize;
-use clap::Parser;
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Duration,
 };
+
+use bytesize::ByteSize;
+use clap::Parser;
+use matrix_http_rendezvous::{DEFAULT_MAX_BYTES, DEFAULT_MAX_ENTRIES, DEFAULT_TTL};
 
 #[derive(Parser)]
 struct Options {
@@ -38,18 +40,19 @@ struct Options {
     prefix: Option<String>,
 
     /// Time to live of entries, in seconds
-    #[arg(short, long, default_value_t = Duration::from_secs(60).into())]
+    #[arg(short, long, default_value_t = DEFAULT_TTL.into())]
     ttl: humantime::Duration,
 
     /// Maximum number of entries to store
-    #[arg(short, long, default_value_t = 10000)]
+    #[arg(short, long, default_value_t = DEFAULT_MAX_ENTRIES)]
     capacity: usize,
 
     /// Maximum payload size, in bytes
-    #[arg(short, long, default_value = "4KiB")]
+    #[arg(short, long, default_value_t = ByteSize(DEFAULT_MAX_BYTES as u64))]
     max_bytes: ByteSize,
 
-    /// Set this flag to test how much memory the server might use with a sessions map fully loaded
+    /// Set this flag to test how much memory the server might use with a
+    /// sessions map fully loaded
     #[arg(long)]
     mem_check: bool,
 }
