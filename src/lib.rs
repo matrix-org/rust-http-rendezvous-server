@@ -32,6 +32,9 @@ pub const DEFAULT_MAX_ENTRIES: usize = 10_000;
 /// Default max size of each entry
 pub const DEFAULT_MAX_BYTES: usize = 4 * 1024;
 
+#[doc(hidden)]
+pub const DEFAULT_MAX_BYTES_STR: &str = "4KiB";
+
 pub use self::{
     handlers::router,
     sessions::{Session, Sessions},

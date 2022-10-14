@@ -23,7 +23,7 @@ use std::{
 
 use bytesize::ByteSize;
 use clap::Parser;
-use matrix_http_rendezvous::{DEFAULT_MAX_BYTES, DEFAULT_MAX_ENTRIES, DEFAULT_TTL};
+use matrix_http_rendezvous::{DEFAULT_MAX_BYTES_STR, DEFAULT_MAX_ENTRIES, DEFAULT_TTL};
 
 #[derive(Parser)]
 struct Options {
@@ -48,7 +48,7 @@ struct Options {
     capacity: usize,
 
     /// Maximum payload size, in bytes
-    #[arg(short, long, default_value_t = ByteSize(DEFAULT_MAX_BYTES as u64))]
+    #[arg(short, long, default_value = DEFAULT_MAX_BYTES_STR)]
     max_bytes: ByteSize,
 
     /// Set this flag to test how much memory the server might use with a
