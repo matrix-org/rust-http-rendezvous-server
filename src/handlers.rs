@@ -108,14 +108,13 @@ async fn get_session(
 }
 
 #[must_use]
-#[allow(clippy::trait_duplication_in_bounds)]
 pub fn router<B>(prefix: &str, sessions: Sessions, max_bytes: usize) -> Router<(), B>
 where
     B: HttpBody + Send + 'static,
     <B as HttpBody>::Data: Send,
     <B as HttpBody>::Error: std::error::Error + Send + Sync,
 {
-    let router = Router::with_state(sessions)
+    let router = Router::new()
         .route("/", post(new_session))
         .route(
             "/:id",
@@ -136,5 +135,5 @@ where
                 .expose_headers([ETAG, LOCATION, HeaderName::from_static("x-max-bytes")]),
         );
 
-    Router::new().nest(prefix, router)
+    Router::new().nest(prefix, router).with_state(sessions)
 }
