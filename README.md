@@ -17,5 +17,5 @@ For instructions on usage as a Synapse module, see [matrix-http-rendezvous-synap
 ### Releasing
 
 ```sh
-./release.sh patch
+./scripts/release.sh patch
 ```

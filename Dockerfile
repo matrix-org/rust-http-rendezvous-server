@@ -45,7 +45,7 @@ RUN rustup target add --toolchain "${RUSTC_VERSION}" \
   aarch64-unknown-linux-musl
 
 # Helper script that transforms docker platforms to LLVM triples
-COPY ./misc/docker-arch-to-rust-target.sh /
+COPY ./scripts/docker-arch-to-rust-target.sh /
 
 ARG TARGETPLATFORM
 

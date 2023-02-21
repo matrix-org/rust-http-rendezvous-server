@@ -1,12 +1,12 @@
 [package]
 name = "matrix-http-rendezvous-synapse"
-version = "0.1.10"
-authors = ["Quentin Gliech <quenting@element.io>"]
-edition = "2021"
-license = "Apache-2.0"
 description = "A Matrix Synapse module which implements MSC3886"
-repository = "https://github.com/matrix-org/rust-http-rendezvous-server/"
-rust-version = "1.61"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 publish = false
 
 [lib]
