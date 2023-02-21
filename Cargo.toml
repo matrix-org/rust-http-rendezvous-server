@@ -31,7 +31,7 @@ tokio = { version = "1.25.0", features = ["macros", "rt", "test-util"] }
 members = ["server", "synapse"]
 
 [workspace.package]
-version = "0.1.11"
+version = "0.1.12"
 authors = ["Quentin Gliech <quenting@element.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -39,4 +39,4 @@ repository = "https://github.com/matrix-org/rust-http-rendezvous-server/"
 rust-version = "1.64"
 
 [workspace.dependencies]
-matrix-http-rendezvous = { path = "./", version = "0.1.11" }
+matrix-http-rendezvous = { path = "./", version = "0.1.12" }
