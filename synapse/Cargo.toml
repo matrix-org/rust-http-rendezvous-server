@@ -28,4 +28,4 @@ tokio = "1.25.0"
 tower = { version = "0.4.13", features = ["util"] }
 tracing = { version = "0.1.37", features = ["log", "log-always"] }
 
-matrix-http-rendezvous = { path = "../" }
+matrix-http-rendezvous = { workspace = true }

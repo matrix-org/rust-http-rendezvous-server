@@ -17,4 +17,4 @@ tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread", "signal"]
 tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
 
-matrix-http-rendezvous = { path = "../" }
+matrix-http-rendezvous = { workspace = true }
