@@ -259,12 +259,12 @@ jobs:
           toolchain: stable
 
       - name: Publish matrix-http-rendezvous on crates.io
-        run: cargo publish matrix-http-rendezvous
+        run: cargo publish -p matrix-http-rendezvous
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
       - name: Publish matrix-http-rendezvous-server on crates.io
-        run: cargo publish matrix-http-rendezvous-server
+        run: cargo publish -p matrix-http-rendezvous-server
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
