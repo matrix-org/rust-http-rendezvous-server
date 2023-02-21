@@ -29,11 +29,11 @@ use matrix_http_rendezvous::{DEFAULT_MAX_BYTES_STR, DEFAULT_MAX_ENTRIES, DEFAULT
 #[command(version, about)]
 struct Options {
     /// Address on which to listen
-    #[arg(short, long, default_value_t = IpAddr::V4(Ipv4Addr::LOCALHOST))]
+    #[arg(short, long, default_value_t = IpAddr::V4(Ipv4Addr::LOCALHOST), env = "LISTEN_ADDRESS")]
     address: IpAddr,
 
     /// Port on which to listen
-    #[arg(short, long, default_value_t = 8090)]
+    #[arg(short, long, default_value_t = 8090, env = "LISTEN_PORT")]
     port: u16,
 
     /// Path prefix on which to mount the rendez-vous server
@@ -73,6 +73,13 @@ async fn main() {
 
     let sessions = matrix_http_rendezvous::Sessions::new(ttl, options.capacity);
 
+    let signal = async move {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("Failed to install signal handler");
+        tracing::info!("SIGINT received, shutting down");
+    };
+
     if options.mem_check {
         tracing::info!(
             "Filling cache with {capacity} entries of {max_bytes}",
@@ -81,7 +88,13 @@ async fn main() {
         );
         sessions.fill_for_mem_check(max_bytes).await;
         tracing::info!("Done filling, waiting 60 seconds");
-        tokio::time::sleep(Duration::from_secs(60)).await;
+
+        let sleep = tokio::time::sleep(Duration::from_secs(60));
+        tokio::select! {
+            _ = signal => {},
+            _ = sleep => {},
+        };
+
         return;
     }
 
@@ -100,6 +113,7 @@ async fn main() {
 
     hyper::Server::bind(&addr)
         .serve(service.into_make_service())
+        .with_graceful_shutdown(signal)
         .await
         .unwrap();
 }
