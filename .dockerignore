@@ -1,0 +1,6 @@
+/Dockerfile
+/.dockerignore
+/docker-bake.hcl
+/target
+/Cargo.lock
+/.cargo

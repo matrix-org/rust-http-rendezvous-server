@@ -1,19 +1,19 @@
 [package]
 name = "matrix-http-rendezvous-server"
-version = "0.1.10"
-authors = ["Quentin Gliech <quenting@element.io>"]
-edition = "2021"
-license = "Apache-2.0"
 description = "A standalone server which implements MSC3886"
-repository = "https://github.com/matrix-org/rust-http-rendezvous-server/"
-rust-version = "1.61"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 bytesize = "1.1.0"
-clap = { version = "4.1.4", features = ["derive"] }
+clap = { version = "4.1.4", features = ["derive", "env"] }
 humantime = "2.1.0"
 hyper = { version = "0.14.23", features = ["server"] }
-tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.25.0", features = ["macros", "rt-multi-thread", "signal"] }
 tracing = "0.1.37"
 tracing-subscriber = "0.3.16"
 

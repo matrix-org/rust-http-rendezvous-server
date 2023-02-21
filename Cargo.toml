@@ -1,13 +1,13 @@
 [package]
 name = "matrix-http-rendezvous"
-version = "0.1.10"
-authors = ["Quentin Gliech <quenting@element.io>"]
-edition = "2021"
-license = "Apache-2.0"
 description = "A Tower service which implements MSC3886"
-repository = "https://github.com/matrix-org/rust-http-rendezvous-server/"
-rust-version = "1.61"
-exclude = ["/.github", ".gitignore"]
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+exclude = ["/.github", ".gitignore", "/scripts"]
 
 [dependencies]
 axum = { version = "0.6.4", features = ["headers"] }
@@ -29,3 +29,11 @@ tokio = { version = "1.25.0", features = ["macros", "rt", "test-util"] }
 
 [workspace]
 members = ["server", "synapse"]
+
+[workspace.package]
+version = "0.1.10"
+authors = ["Quentin Gliech <quenting@element.io>"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/matrix-org/rust-http-rendezvous-server/"
+rust-version = "1.64"
