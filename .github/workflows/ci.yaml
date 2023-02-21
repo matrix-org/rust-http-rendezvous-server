@@ -79,12 +79,10 @@ jobs:
         with:
           version: 0.10.1
 
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-          profile: minimal
-          default: true
           target: ${{ matrix.target }}
 
       - name: Setup Rust build cache
@@ -95,9 +93,9 @@ jobs:
       - name: Build wheels
         run: |
           if [[ "${{ matrix.target }}" == *-linux-gnu ]]; then
-            EXTRA_FLAGS="--compatibility manylinux2014"
+            EXTRA_FLAG="--compatibility manylinux2014"
           elif [[ "${{ matrix.target }}" == *-linux-musl ]]; then
-            EXTRA_FLAGS="--compatibility musllinux_1_2"
+            EXTRA_FLAG="--compatibility musllinux_1_2"
           fi
 
           maturin build \
@@ -105,7 +103,7 @@ jobs:
             --out dist \
             --manifest-path synapse/Cargo.toml \
             -i ${{ steps.cpy310.outputs.python-path }} \
-            ${EXTRA_FLAGS} \
+            ${EXTRA_FLAG} \
             --target ${{ matrix.target }} \
             --zig
 
@@ -334,12 +332,15 @@ jobs:
         with:
           images: "${{ env.IMAGE }}"
           bake-target: docker-metadata-action-debug
+          flavor: |
+            latest=auto
+            suffix=-debug,onlatest=true
           tags: |
-            type=ref,event=branch,suffix=-debug
-            type=semver,pattern={{version}},suffix=-debug
-            type=semver,pattern={{major}}.{{minor}},suffix=-debug
-            type=semver,pattern={{major}},suffix=-debug
-            type=sha,suffix=-debug
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
 
       - name: Setup Cosign
         uses: sigstore/cosign-installer@v2.8.1
@@ -378,6 +379,7 @@ jobs:
       - name: Build and push
         uses: docker/bake-action@v2
         if: github.event_name != 'pull_request'
+        id: bake
         with:
           files: |
             docker-bake.hcl
@@ -395,9 +397,11 @@ jobs:
           github.event_name != 'pull_request'
           && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
 
-        run: cosign sign ${TAGS}
+        run: >
+          cosign sign
+            "${{ env.IMAGE }}@${{ fromJSON(steps.bake.outputs.metadata).regular['containerimage.digest'] }}"
+            "${{ env.IMAGE }}@${{ fromJSON(steps.bake.outputs.metadata).debug['containerimage.digest'] }}"
         env:
-          TAGS: "${{ steps.meta.outputs.tags }} ${{ steps.meta-debug.outputs.tags }}"
           COSIGN_EXPERIMENTAL: 1
 
 
