@@ -14,12 +14,12 @@ name = "matrix_http_rendezvous_synapse"
 crate-type = ["cdylib"]
 
 [dependencies]
-anyhow = "1.0.68"
+anyhow = "1.0.69"
 bytesize = { version = "1.1.0", features = ["serde"] }
 http-body = "0.4.5"
 humantime = "2.1.0"
 humantime-serde = "1.1.1"
-pyo3 = { version = "0.18.0", features = ["extension-module", "abi3-py37", "anyhow"] }
+pyo3 = { version = "0.18.1", features = ["extension-module", "abi3-py37", "anyhow"] }
 pyo3-asyncio = "0.18.0"
 pyo3-log = "0.8.1"
 pyo3-matrix-synapse-module = "0.1.2"
@@ -28,4 +28,4 @@ tokio = "1.25.0"
 tower = { version = "0.4.13", features = ["util"] }
 tracing = { version = "0.1.37", features = ["log", "log-always"] }
 
-matrix-http-rendezvous = { path = "../", version = "0.1.10" }
+matrix-http-rendezvous = { path = "../" }
