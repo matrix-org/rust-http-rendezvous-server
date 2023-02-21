@@ -28,7 +28,7 @@ run poetry version "${BUMP}"
 VERSION="v$(poetry version -s)"
 run cd ..
 
-run git add Cargo.toml ./*/Cargo.toml synapse/pyproject.toml
+run git add Cargo.toml synapse/pyproject.toml
 run git status
 
 printf "About to commit and push version %s. Are you sure? " "${VERSION}"
