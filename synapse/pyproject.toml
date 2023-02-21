@@ -20,7 +20,7 @@ authors = [
 
 [tool.poetry]
 name = "matrix_http_rendezvous_synapse"
-version = "0.1.10"
+version = "0.1.11"
 description = "A Matrix Synapse module which implements MSC3886"
 authors = ["Quentin Gliech <quenting@element.io>"]
 
