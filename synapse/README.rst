@@ -25,7 +25,14 @@ Usage
     experimental_features:
       msc3886_endpoint: /_synapse/client/org.matrix.msc3886/rendezvous
 
-4. Run Synapse with the asyncio reactor enabled::
+4. Enable additional CORS headers for the API endpoints within the listeners section of your homeserver.yaml::
+
+    listeners:
+      - type: http
+        experimental_cors_msc3886: True
+        # ... rest of the HTTP listener config
+
+5. Run Synapse with the asyncio reactor enabled::
 
     SYNAPSE_ASYNC_IO_REACTOR=1 python -m synapse.app.homeserver
 
@@ -51,6 +58,11 @@ An example configuration setting these and a custom prefix would like::
 
     experimental_features:
       msc3886_endpoint: /rendezvous # this should match above
+    
+    listeners:
+      - type: http
+        experimental_cors_msc3886: True
+        # ... rest of the HTTP listener config
 
 ^^^^^^^^^^^^
 Memory usage
